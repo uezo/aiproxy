@@ -180,6 +180,33 @@ class ModelOverwriteFilter(RequestFilterBase):
             request_json["model"] = "gpt-3.5-turbo"
 ```
 
+Lastly, `ReplayFilter` that retrieves content for a specific request_id from the histories. This is an exceptionally cool feature for developers to test AI-based applications.
+
+```python
+class ReplayFilter(RequestFilterBase):
+    async def filter(self, request_id: str, request_json: dict, request_headers: dict) -> Union[str, None]:
+        # Get request_id to replay from request header
+        request_id = request_headers.get("x-aiproxy-replay")
+        if not request_id:
+            return
+        
+        db = worker.get_session()
+        try:
+            # Get and return the response content from histories
+            r = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
+            if r:
+                return r.content
+            else:
+                return "Record not found for {request_id}"
+        
+        except Exception as ex:
+            logger.error(f"Error at ReplayFilter: {str(ex)}\n{traceback.format_exc()}")
+            return "Error at getting response for {request_id}"
+        
+        finally:
+            db.close()
+```
+
 NOTE: **Response** filter doesn't work when `stream=True`.
 
 
