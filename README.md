@@ -35,7 +35,7 @@ Enjoy😊🦉
 
 ## 🛠️ Custom entrypoint
 
-To customize **🦉AIProxy**, make your custom endpoint and configure logger and filters here.
+To customize **🦉AIProxy**, make your custom entrypoint and configure logger and filters here.
 
 ```python
 from contextlib import asynccontextmanager
