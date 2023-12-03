@@ -135,24 +135,24 @@ class ChatGPTProxy(ProxyBase):
                 if request_json.get("stream"):
                     async def process_stream(stream: AsyncContentStream) -> AsyncGenerator[str, None]:
                         # Async content generator
-                        async for chunk in stream:
+                        try:
+                            async for chunk in stream:
+                                self.access_logger_queue.put(StreamChunkItem(
+                                    request_id=request_id,
+                                    chunk_json=chunk.model_dump()
+                                ))
+                                if chunk:
+                                    yield chunk.model_dump_json()
+                        
+                        finally:
+                            # Response log
+                            now = time.time()
                             self.access_logger_queue.put(StreamChunkItem(
                                 request_id=request_id,
-                                chunk_json=chunk.model_dump()
+                                duration=now - start_time,
+                                duration_api=now - start_time_api,
+                                request_json=request_json
                             ))
-                            if chunk:
-                                yield chunk.model_dump_json()
-
-                        duration = time.time() - start_time
-                        duration_api = time.time() - start_time_api
-
-                        # Response log
-                        self.access_logger_queue.put(StreamChunkItem(
-                            request_id=request_id,
-                            duration=duration,
-                            duration_api=duration_api,
-                            request_json=request_json
-                        ))
 
                     return EventSourceResponse(process_stream(response))
 
