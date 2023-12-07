@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import logging
 import os
@@ -11,11 +12,177 @@ from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse, AsyncContentStream
 from openai import AsyncClient, APIStatusError, APIResponseValidationError, APIError, OpenAIError
 from openai.types.chat import ChatCompletion
+import tiktoken
 from .proxy import ProxyBase, RequestFilterBase, ResponseFilterBase, RequestFilterException, ResponseFilterException
-from .accesslog import RequestItem, ResponseItem, StreamChunkItem
+from .accesslog import _AccessLogBase, RequestItemBase, ResponseItemBase, StreamChunkItemBase
 
 
 logger = logging.getLogger(__name__)
+
+
+class ChatGPTRequestItem(RequestItemBase):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        request_headers_copy = self.request_headers.copy()
+        if auth := request_headers_copy.get("authorization"):
+            request_headers_copy["authorization"] = auth[:12] + "*****" + auth[-2:]
+
+        accesslog = accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="request",
+            content=self.request_json["messages"][-1]["content"],
+            raw_body=json.dumps(self.request_json, ensure_ascii=False),
+            raw_headers=json.dumps(request_headers_copy, ensure_ascii=False),
+            model=self.request_json.get("model")
+        )
+
+        return accesslog
+
+
+class ChatGPTResponseItem(ResponseItemBase):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        content=self.response_json["choices"][0]["message"].get("content")
+        function_call=self.response_json["choices"][0]["message"].get("function_call")
+        tool_calls=self.response_json["choices"][0]["message"].get("tool_calls")
+        model=self.response_json["model"]
+        prompt_tokens=self.response_json["usage"]["prompt_tokens"]
+        completion_tokens=self.response_json["usage"]["completion_tokens"]
+
+        return accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="response",
+            content=content,
+            function_call=json.dumps(function_call, ensure_ascii=False) if function_call is not None else None,
+            tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None,
+            raw_body=json.dumps(self.response_json, ensure_ascii=False),
+            raw_headers=json.dumps(self.response_headers, ensure_ascii=False) if self.response_headers else None,
+            model=model,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            request_time=self.duration,
+            request_time_api=self.duration_api
+        )
+
+
+token_encoder = tiktoken.get_encoding("cl100k_base")
+
+def count_token(content: str):
+    return len(token_encoder.encode(content))
+
+def count_request_token(request_json: dict):
+    tokens_per_message = 3
+    tokens_per_name = 1
+    token_count = 0
+
+    # messages
+    for m in request_json["messages"]:
+        token_count += tokens_per_message
+        for k, v in m.items():
+            token_count += count_token(v)
+            if k == "name":
+                token_count += tokens_per_name
+
+    # functions
+    if functions := request_json.get("functions"):
+        for f in functions:
+            token_count += count_token(json.dumps(f))
+
+    # function_call
+    if function_call := request_json.get("function_call"):
+        if isinstance(function_call, dict):
+            token_count += count_token(json.dumps(function_call))
+        else:
+            token_count += count_token(function_call)
+
+    # tools
+    if tools := request_json.get("tools"):
+        for t in tools:
+            token_count += count_token(json.dumps(t))
+
+    if tool_choice := request_json.get("tool_choice"):
+        token_count += count_token(json.dumps(tool_choice))
+
+    token_count += 3
+    return token_count
+
+
+class ChatGPTStreamResponseItem(StreamChunkItemBase):
+    def to_accesslog(self, chunks: list, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        chunk_jsons = []
+        response_content = ""
+        function_call = None
+        tool_calls = None
+        prompt_tokens = 0
+        completion_tokens = 0
+
+        # Parse info from chunks
+        for chunk in chunks:
+            chunk_jsons.append(chunk.chunk_json)
+
+            if len(chunk.chunk_json["choices"]) == 0:
+                # Azure returns the first delta with empty choices
+                continue
+
+            delta = chunk.chunk_json["choices"][0]["delta"]
+
+            # Make tool_calls
+            if delta.get("tool_calls"):
+                if tool_calls is None:
+                    tool_calls = []
+                if delta["tool_calls"][0]["function"].get("name"):
+                    tool_calls.append({
+                        "type": "function",
+                        "function": {
+                            "name": delta["tool_calls"][0]["function"]["name"],
+                            "arguments": ""
+                        }
+                    })
+                elif delta["tool_calls"][0]["function"].get("arguments"):
+                    tool_calls[-1]["function"]["arguments"] += delta["tool_calls"][0]["function"].get("arguments") or ""
+
+            # Make function_call
+            elif delta.get("function_call"):
+                if function_call is None:
+                    function_call = {}
+                if delta["function_call"].get("name"):
+                    function_call["name"] = delta["function_call"]["name"]
+                    function_call["arguments"] = ""
+                elif delta["function_call"].get("arguments"):
+                    function_call["arguments"] += delta["function_call"]["arguments"]
+
+            # Text content
+            else:
+                response_content += delta.get("content") or ""
+        
+        # Serialize
+        function_call_str = json.dumps(function_call, ensure_ascii=False) if function_call is not None else None
+        tool_calls_str = json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None
+
+        # Count tokens
+        prompt_tokens = count_request_token(self.request_json)
+
+        if tool_calls_str:
+            completion_tokens = count_token(tool_calls_str)
+        elif function_call_str:
+            completion_tokens = count_token(function_call_str)
+        else:
+            completion_tokens = count_token(response_content)
+
+        return accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="response",
+            content=response_content,
+            function_call=function_call_str,
+            tool_calls=tool_calls_str,
+            raw_body=json.dumps(chunk_jsons, ensure_ascii=False),
+            model=chunk_jsons[0]["model"],
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            request_time=self.duration,
+            request_time_api=self.duration_api
+        )
 
 
 # Reverse proxy application for ChatGPT
@@ -58,7 +225,7 @@ class ChatGPTProxy(ProxyBase):
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 }
                 # Response log
-                self.access_logger_queue.put(ResponseItem(
+                self.access_logger_queue.put(ChatGPTResponseItem(
                     request_id=request_id,
                     response_json=resp_for_log
                 ))
@@ -107,7 +274,7 @@ class ChatGPTProxy(ProxyBase):
                 request_headers = dict(request.headers.items())
 
                 # Log request
-                self.access_logger_queue.put(RequestItem(
+                self.access_logger_queue.put(ChatGPTRequestItem(
                     request_id=request_id,
                     request_json=request_json,
                     request_headers=request_headers
@@ -137,7 +304,7 @@ class ChatGPTProxy(ProxyBase):
                         # Async content generator
                         try:
                             async for chunk in stream:
-                                self.access_logger_queue.put(StreamChunkItem(
+                                self.access_logger_queue.put(ChatGPTStreamResponseItem(
                                     request_id=request_id,
                                     chunk_json=chunk.model_dump()
                                 ))
@@ -147,7 +314,7 @@ class ChatGPTProxy(ProxyBase):
                         finally:
                             # Response log
                             now = time.time()
-                            self.access_logger_queue.put(StreamChunkItem(
+                            self.access_logger_queue.put(ChatGPTStreamResponseItem(
                                 request_id=request_id,
                                 duration=now - start_time,
                                 duration_api=now - start_time_api,
@@ -163,7 +330,7 @@ class ChatGPTProxy(ProxyBase):
                     response = await self.filter_response(request_id, response)
 
                     # Response log
-                    self.access_logger_queue.put(ResponseItem(
+                    self.access_logger_queue.put(ChatGPTResponseItem(
                         request_id=request_id,
                         response_json=response.model_dump(),
                         duration=time.time() - start_time,
