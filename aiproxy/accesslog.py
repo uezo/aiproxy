@@ -1,11 +1,14 @@
 from abc import ABC, abstractmethod
+from collections.abc import Iterable
 from datetime import datetime
 import json
 import logging
-from queue import Queue
+from time import sleep
 import traceback
+from typing import Generator, List
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, declared_attr
+from .queueclient import DefaultQueueClient, QueueItemBase, QueueClientBase
 
 
 logger = logging.getLogger(__name__)
@@ -74,7 +77,7 @@ class _AccessLogBase:
 
 
 # Classes for access log queue item
-class RequestItemBase(ABC):
+class RequestItemBase(QueueItemBase):
     def __init__(self, request_id: str, request_json: dict, request_headers: dict) -> None:
         self.request_id = request_id
         self.request_json = request_json
@@ -85,7 +88,7 @@ class RequestItemBase(ABC):
         ...
 
 
-class ResponseItemBase(ABC):
+class ResponseItemBase(QueueItemBase):
     def __init__(self, request_id: str, response_json: dict, response_headers: dict = None, duration: float = 0, duration_api: float = 0) -> None:
         self.request_id = request_id
         self.response_json = response_json
@@ -98,7 +101,7 @@ class ResponseItemBase(ABC):
         ...
 
 
-class StreamChunkItemBase(ABC):
+class StreamChunkItemBase(QueueItemBase):
     def __init__(self, request_id: str, chunk_json: dict = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, request_json: dict = None) -> None:
         self.request_id = request_id
         self.chunk_json = chunk_json
@@ -112,7 +115,7 @@ class StreamChunkItemBase(ABC):
         ...
 
 
-class ErrorItemBase(ABC):
+class ErrorItemBase(QueueItemBase):
     def __init__(self, request_id: str, exception: Exception, traceback_info: str, response_json: dict = None, response_headers: dict = None) -> None:
         self.request_id = request_id
         self.exception = exception
@@ -139,6 +142,20 @@ class ErrorItemBase(ABC):
             model="error_handler"
         )
 
+    def to_dict(self) -> dict:
+        return {
+            "type": self.__class__.__name__,
+            "request_id": self.request_id,
+            "exception": str(self.exception),
+            "traceback_info": self.traceback_info,
+            "response_json": self.response_json,
+            "response_headers": self.response_headers
+        }
+
+
+class WorkerShutdownItem(QueueItemBase):
+    ...
+
 
 AccessLogBase = declarative_base(cls=_AccessLogBase)
 
@@ -147,7 +164,7 @@ class AccessLog(AccessLogBase): ...
 
 
 class AccessLogWorker:
-    def __init__(self, *, connection_str: str = "sqlite:///aiproxy.db", db_engine = None, accesslog_cls = AccessLog, log_queue: Queue = None):
+    def __init__(self, *, connection_str: str = "sqlite:///aiproxy.db", db_engine = None, accesslog_cls = AccessLog, queue_client: QueueClientBase = None):
         if db_engine:
             self.db_engine = db_engine
         else:
@@ -155,7 +172,7 @@ class AccessLogWorker:
         self.accesslog_cls = accesslog_cls
         self.accesslog_cls.metadata.create_all(bind=self.db_engine)
         self.get_session = sessionmaker(autocommit=False, autoflush=False, bind=self.db_engine)
-        self.log_queue = log_queue or Queue()
+        self.queue_client = queue_client or DefaultQueueClient()
         self.chunk_buffer = {}
 
     def insert_request(self, accesslog: _AccessLogBase):
@@ -184,44 +201,49 @@ class AccessLogWorker:
         finally:
             db.close()
 
+    def process_item(self, item: QueueItemBase):
+        try:
+            # Request
+            if isinstance(item, RequestItemBase):
+                self.insert_request(item.to_accesslog(self.accesslog_cls))
+
+            # Non-stream response
+            elif isinstance(item, ResponseItemBase):
+                self.insert_response(item.to_accesslog(self.accesslog_cls))
+
+            # Stream response
+            elif isinstance(item, StreamChunkItemBase):
+                if not self.chunk_buffer.get(item.request_id):
+                    self.chunk_buffer[item.request_id] = []
+
+                if item.duration == 0:
+                    self.chunk_buffer[item.request_id].append(item)
+
+                else:
+                    # Last chunk data for specific request_id
+                    self.insert_response(item.to_accesslog(
+                        self.chunk_buffer[item.request_id], self.accesslog_cls
+                    ))
+                    # Remove chunks from buffer
+                    del self.chunk_buffer[item.request_id]
+
+            # Error response
+            elif isinstance(item, ErrorItemBase):
+                self.insert_response(item.to_accesslog(self.accesslog_cls))
+
+        except Exception as ex:
+            logger.error(f"Error at processing queue item: {ex}\n{traceback.format_exc()}")
+
+
     def run(self):
         while True:
             try:
-                data = self.log_queue.get()
-
-                # Request
-                if isinstance(data, RequestItemBase):
-                    self.insert_request(data.to_accesslog(self.accesslog_cls))
-
-                # Non-stream response
-                elif isinstance(data, ResponseItemBase):
-                    self.insert_response(data.to_accesslog(self.accesslog_cls))
-
-                # Stream response
-                elif isinstance(data, StreamChunkItemBase):
-                    if not self.chunk_buffer.get(data.request_id):
-                        self.chunk_buffer[data.request_id] = []
-
-                    if data.duration == 0:
-                        self.chunk_buffer[data.request_id].append(data)
-
-                    else:
-                        # Last chunk data for specific request_id
-                        self.insert_response(data.to_accesslog(
-                            self.chunk_buffer[data.request_id], self.accesslog_cls
-                        ))
-                        # Remove chunks from buffer
-                        del self.chunk_buffer[data.request_id]
-
-                # Error response
-                elif isinstance(data, ErrorItemBase):
-                    self.insert_response(data.to_accesslog(self.accesslog_cls))
-
-                # Shutdown
-                elif data is None:
-                    break
-
-                self.log_queue.task_done()
+                for item in self.queue_client.get():
+                    if isinstance(item, WorkerShutdownItem) or item is None:
+                        return
+                    self.process_item(item)
 
             except Exception as ex:
-                logger.error(f"Error at processing queue: {ex}\n{traceback.format_exc()}")
+                logger.error(f"Error at processing loop: {ex}\n{traceback.format_exc()}")
+
+            sleep(self.queue_client.dequeue_interval)

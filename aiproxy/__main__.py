@@ -34,10 +34,10 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=worker.run, daemon=True).start()
     yield
     # Stop access log worker
-    worker.log_queue.put(None)
+    worker.queue_client.put(None)
 
 # Setup ChatGPTProxy
-proxy = ChatGPTProxy(api_key=args.openai_api_key, access_logger_queue=worker.log_queue)
+proxy = ChatGPTProxy(api_key=args.openai_api_key, access_logger_queue=worker.queue_client)
 
 # Setup server application
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
