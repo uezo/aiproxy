@@ -57,7 +57,7 @@ logger.addHandler(streamHandler)
 worker = CustomAccessLogWorker(accesslog_cls=CustomAccessLog)   # 🌟 Instantiate your custom access log worker
 
 # Setup proxy for ChatGPT
-proxy = ChatGPTProxy(api_key=YOUR_API_KEY, access_logger_queue=worker.log_queue)
+proxy = ChatGPTProxy(api_key=YOUR_API_KEY, access_logger_queue=worker.queue_client)
 proxy.add_filter(CustomRequestFilter1())     # 🌟 Set your custom filter(s)
 proxy.add_filter(CustomRequestFilter2())     # 🌟 Set your custom filter(s)
 proxy.add_filter(CustomResponseFilter())     # 🌟 Set your custom filter(s)
@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
     threading.Thread(target=worker.run, daemon=True).start()
     yield
     # Stop access log worker
-    worker.log_queue.put(None)
+    worker.queue_client.put(None)
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
 proxy.add_route(app, "/chat/completions")
@@ -79,6 +79,18 @@ Run with uvicorn with some params if you need.
 
 ```sh
 $ uvicorn run:app --host 0.0.0.0 --port 8080
+```
+
+To use Azure OpenAI, instantiate `ChatGPTProxy` with `AsyncAzureOpenAI`.
+
+```python
+azure_client = openai.AsyncAzureOpenAI(
+    api_key = "YOUR_API_KEY",
+    api_version = "2023-10-01-preview",
+    azure_endpoint = "https://{DEPLOYMENT_ID}.openai.azure.com/"
+)
+
+proxy = ChatGPTProxy(async_client=azure_client, access_logger_queue=worker.queue_client)
 ```
 
 
@@ -206,6 +218,8 @@ class ReplayFilter(RequestFilterBase):
         finally:
             db.close()
 ```
+
+`request_id` is included in HTTP response headers as `x-aiproxy-request-id`.
 
 NOTE: **Response** filter doesn't work when `stream=True`.
 
