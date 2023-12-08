@@ -1,9 +1,9 @@
 from abc import ABC, abstractmethod
 import logging
-from queue import Queue
 from typing import List, Union
 from fastapi import FastAPI
 from fastapi.responses import Response
+from .queueclient import QueueClientBase
 
 
 logger = logging.getLogger(__name__)
@@ -40,7 +40,7 @@ class ProxyBase(ABC):
         *,
         request_filters: List[RequestFilterBase] = None,
         response_filters: List[ResponseFilterBase] = None,
-        access_logger_queue: Queue
+        access_logger_queue: QueueClientBase
     ):
         # Filters
         self.request_filters = request_filters or []

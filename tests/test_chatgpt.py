@@ -1,6 +1,7 @@
 import pytest
 from datetime import datetime
 import json
+from time import sleep
 from typing import Union
 from uuid import uuid4
 from openai import Client, APIStatusError
@@ -1973,6 +1974,27 @@ def test_request_item_to_accesslog(messages, request_json, request_headers, func
     assert accesslog.model == request_json["model"]
 
 
+def test_request_item_to_from_json(messages, request_json, request_headers, functions, tools):
+    request_id = str(uuid4())
+    request_json["functions"] = functions
+    request_json["tools"] = tools
+    item = ChatGPTRequestItem(request_id, request_json, request_headers)
+
+    item_json = item.to_json()
+    item_dict = json.loads(item_json)
+
+    assert item_dict["type"] == ChatGPTRequestItem.__name__
+    assert item_dict["request_id"] == request_id
+    assert item_dict["request_json"] == request_json
+    assert item_dict["request_headers"] == request_headers
+
+    item_restore = ChatGPTRequestItem.from_json(item_json)
+
+    assert item_restore.request_id == request_id
+    assert item_restore.request_json == request_json
+    assert item_restore.request_headers == request_headers    
+
+
 def test_response_item_to_accesslog(response_json):
     request_id = str(uuid4())
     item = ChatGPTResponseItem(request_id, response_json, None, 1.0, 2.0)
@@ -2139,7 +2161,7 @@ def worker():
 
 @pytest.fixture
 def chatgpt_proxy(worker):
-    return ChatGPTProxy(access_logger_queue=worker.log_queue)
+    return ChatGPTProxy(access_logger_queue=worker.queue_client)
 
 @pytest.fixture
 def db(worker):
@@ -2202,6 +2224,9 @@ def test_post_content(messages, request_headers, openai_client, db):
     assert request_id is not None
     assert "天気" in comp_resp.choices[0].message.content
 
+    # Wait for processing queued items
+    sleep(2.0)
+
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
@@ -2223,10 +2248,12 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
     function_call = comp_resp.choices[0].message.function_call
     assert function_call is not None
 
+    # Wait for processing queued items
+    sleep(2.0)
+
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
-    print(function_call)
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.function_call) == function_call.model_dump()
 
@@ -2244,6 +2271,9 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
 
     tool_calls = comp_resp.choices[0].message.tool_calls
     assert tool_calls is not None
+
+    # Wait for processing queued items
+    sleep(2.0)
 
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
@@ -2267,6 +2297,9 @@ def test_post_content_apierror(messages, request_headers, openai_client, db):
 
     assert request_id is not None
 
+    # Wait for processing queued items
+    sleep(2.0)
+
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()
 
@@ -2289,6 +2322,9 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
     for chunk in comp_resp:
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
             content += chunk.choices[0].delta.content
+
+    # Wait for processing queued items
+    sleep(10.0)
 
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
@@ -2316,6 +2352,9 @@ def test_post_content_stream_function(messages, request_headers, functions, open
             else:
                 function_call["arguments"] += chunk.choices[0].delta.function_call.arguments
 
+    # Wait for processing queued items
+    sleep(10.0)
+
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
@@ -2342,6 +2381,9 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
             elif chunk.choices[0].delta.tool_calls[0].function.arguments:
                 tool_calls[-1]["function"]["arguments"] += chunk.choices[0].delta.tool_calls[0].function.arguments
 
+    # Wait for processing queued items
+    sleep(10.0)
+
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
@@ -2363,6 +2405,9 @@ def test_post_content_stream_apierror(messages, request_headers, openai_client, 
     request_id = headers.get("x-aiproxy-request-id")
 
     assert request_id is not None
+
+    # Wait for processing queued items
+    sleep(2.0)
 
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()

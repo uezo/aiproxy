@@ -15,6 +15,7 @@ from openai.types.chat import ChatCompletion
 import tiktoken
 from .proxy import ProxyBase, RequestFilterBase, ResponseFilterBase, RequestFilterException, ResponseFilterException
 from .accesslog import _AccessLogBase, RequestItemBase, ResponseItemBase, StreamChunkItemBase, ErrorItemBase
+from .queueclient import QueueClientBase
 
 
 logger = logging.getLogger(__name__)
@@ -188,6 +189,10 @@ class ChatGPTStreamResponseItem(StreamChunkItemBase):
 class ChatGPTErrorItem(ErrorItemBase):
     ...
 
+
+queue_item_types = [ChatGPTRequestItem, ChatGPTResponseItem, ChatGPTStreamResponseItem, ChatGPTErrorItem]
+
+
 # Reverse proxy application for ChatGPT
 class ChatGPTProxy(ProxyBase):
     _empty_openai_api_key = "OPENAI_API_KEY_IS_NOT_SET"
@@ -200,7 +205,7 @@ class ChatGPTProxy(ProxyBase):
         max_retries: int = 0,
         request_filters: List[RequestFilterBase] = None,
         response_filters: List[ResponseFilterBase] = None,
-        access_logger_queue: Queue
+        access_logger_queue: QueueClientBase
     ):
         super().__init__(
             request_filters=request_filters,
