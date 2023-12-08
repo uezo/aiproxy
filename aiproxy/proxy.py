@@ -3,6 +3,7 @@ import logging
 from queue import Queue
 from typing import List, Union
 from fastapi import FastAPI
+from fastapi.responses import Response
 
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,12 @@ class ProxyBase(ABC):
             logger.info(f"response filter: {filter.__class__.__name__}")
         else:
             logger.warning(f"Invalid filter: {filter.__class__.__name__}")
+
+    def add_response_headers(self, response: Response, request_id: str, headers: dict = None):
+        response.headers["X-AIProxy-Request-Id"] = request_id
+        if headers:
+            for k, v in headers.items():
+                response.headers[k] = v
 
     @abstractmethod
     def add_route(self, app: FastAPI, base_url: str):

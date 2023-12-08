@@ -8,13 +8,13 @@ import traceback
 from typing import List, Union, AsyncGenerator
 from uuid import uuid4
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sse_starlette.sse import EventSourceResponse, AsyncContentStream
 from openai import AsyncClient, APIStatusError, APIResponseValidationError, APIError, OpenAIError
 from openai.types.chat import ChatCompletion
 import tiktoken
 from .proxy import ProxyBase, RequestFilterBase, ResponseFilterBase, RequestFilterException, ResponseFilterException
-from .accesslog import _AccessLogBase, RequestItemBase, ResponseItemBase, StreamChunkItemBase
+from .accesslog import _AccessLogBase, RequestItemBase, ResponseItemBase, StreamChunkItemBase, ErrorItemBase
 
 
 logger = logging.getLogger(__name__)
@@ -185,6 +185,9 @@ class ChatGPTStreamResponseItem(StreamChunkItemBase):
         )
 
 
+class ChatGPTErrorItem(ErrorItemBase):
+    ...
+
 # Reverse proxy application for ChatGPT
 class ChatGPTProxy(ProxyBase):
     _empty_openai_api_key = "OPENAI_API_KEY_IS_NOT_SET"
@@ -249,7 +252,7 @@ class ChatGPTProxy(ProxyBase):
                         resp["choices"][0] = {"delta": {"content": content}, "finish_reason": "stop", "index": 0}
                         yield json.dumps(resp)
 
-                    return EventSourceResponse(filter_response_stream(json_resp))
+                    return self.return_response_with_headers(EventSourceResponse(filter_response_stream(json_resp)), request_id)
 
                 else:
                     # Non-stream
@@ -266,12 +269,18 @@ class ChatGPTProxy(ProxyBase):
 
         return response.model_validate(response_json)
 
+    def return_response_with_headers(self, resp: JSONResponse, request_id: str):
+        self.add_response_headers(response=resp, request_id=request_id)
+        return resp
+
     def add_route(self, app: FastAPI, base_url: str):
         @app.post(base_url)
-        async def handle_request(request: Request):
+        async def handle_request(request: Request, response: Response):
+            request_id = str(uuid4())
+            self.add_response_headers(response=response, request_id=request_id)
+
             try:
                 start_time = time.time()
-                request_id = str(uuid4())
                 request_json = await request.json()
                 request_headers = dict(request.headers.items())
 
@@ -291,14 +300,14 @@ class ChatGPTProxy(ProxyBase):
                 start_time_api = time.time()
                 if self.client.api_key != self._empty_openai_api_key:
                     # Always use server api key if set to client
-                    response = await self.client.chat.completions.create(**request_json)
+                    completion_response = await self.client.chat.completions.create(**request_json)
                 elif user_auth_header := request_headers.get("authorization"):  # Lower case from client.
-                    response = await self.client.chat.completions.create(
+                    completion_response = await self.client.chat.completions.create(
                         **request_json, extra_headers={"Authorization": user_auth_header}   # Pascal to server
                     )
                 else:
                     # Call API anyway ;)
-                    response = await self.client.chat.completions.create(**request_json)
+                    completion_response = await self.client.chat.completions.create(**request_json)
 
                 # Handling response from API
                 if request_json.get("stream"):
@@ -323,63 +332,115 @@ class ChatGPTProxy(ProxyBase):
                                 request_json=request_json
                             ))
 
-                    return EventSourceResponse(process_stream(response))
+                    return self.return_response_with_headers(EventSourceResponse(process_stream(completion_response)), request_id)
 
                 else:
                     duration_api = time.time() - start_time_api
 
                     # Filter response
-                    response = await self.filter_response(request_id, response)
+                    completion_response = await self.filter_response(request_id, completion_response)
 
                     # Response log
                     self.access_logger_queue.put(ChatGPTResponseItem(
                         request_id=request_id,
-                        response_json=response.model_dump(),
+                        response_json=completion_response.model_dump(),
                         duration=time.time() - start_time,
                         duration_api=duration_api
                     ))
 
-                    return response
+                    return completion_response
 
             # Error handlers
             except RequestFilterException as rfex:
                 logger.error(f"Request filter error: {rfex}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    {"error": {"message": rfex.message, "type": "request_filter_error", "param": None, "code": None}},
-                    status_code=rfex.status_code
-                )
+
+                resp_json = {"error": {"message": rfex.message, "type": "request_filter_error", "param": None, "code": None}}
+
+                # Error log
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=rfex,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
 
             except ResponseFilterException as rfex:
                 logger.error(f"Response filter error: {rfex}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    {"error": {"message": rfex.message, "type": "response_filter_error", "param": None, "code": None}},
-                    status_code=rfex.status_code
-                )
+
+                resp_json = {"error": {"message": rfex.message, "type": "response_filter_error", "param": None, "code": None}}
+
+                # Error log
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=rfex,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
+
 
             except (APIStatusError, APIResponseValidationError) as status_err:
                 logger.error(f"APIStatusError from ChatGPT: {status_err}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    status_err.response.json(),
-                    status_code=status_err.status_code
-                )
+
+                # Error log
+                try:
+                    resp_json = status_err.response.json()
+                except:
+                    resp_json = str(status_err.response.content)
+
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=status_err,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=status_err.status_code), request_id)
 
             except APIError as api_err:
                 logger.error(f"APIError from ChatGPT: {status_err}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    {"error": {"message": api_err.message, "type": api_err.type, "param": api_err.param, "code": api_err.code}},
-                    status_code=502
-                )
+
+                resp_json = {"error": {"message": api_err.message, "type": api_err.type, "param": api_err.param, "code": api_err.code}}
+
+                # Error log
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=api_err,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
 
             except OpenAIError as oai_err:
-                logger.error(f"OpenAIError: {status_err}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    {"error": {"message": str(oai_err), "type": "openai_error", "param": None, "code": None}},
-                    status_code=502
-                )
+                logger.error(f"OpenAIError: {oai_err}\n{traceback.format_exc()}")
+
+                resp_json = {"error": {"message": str(oai_err), "type": "openai_error", "param": None, "code": None}}
+
+                # Error log
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=oai_err,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
 
             except Exception as ex:
                 logger.error(f"Error at server: {ex}\n{traceback.format_exc()}")
-                return JSONResponse(
-                    {"error": {"message": "Proxy error", "type": "proxy_error", "param": None, "code": None}},
-                    status_code=500
-                )
+
+                resp_json = {"error": {"message": "Proxy error", "type": "proxy_error", "param": None, "code": None}}
+
+                # Error log
+                self.access_logger_queue.put(ChatGPTErrorItem(
+                    request_id=request_id,
+                    exception=ex,
+                    traceback_info=traceback.format_exc(),
+                    response_json=resp_json
+                ))
+
+                return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
