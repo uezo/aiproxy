@@ -1,4 +1,6 @@
 from abc import ABC, abstractmethod
+from datetime import datetime
+import json
 import logging
 from queue import Queue
 import traceback
@@ -77,13 +79,13 @@ class RequestItemBase(ABC):
         self.request_id = request_id
         self.request_json = request_json
         self.request_headers = request_headers
-    
+
     @abstractmethod
     def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
         ...
 
 
-class ResponseItemBase:
+class ResponseItemBase(ABC):
     def __init__(self, request_id: str, response_json: dict, response_headers: dict = None, duration: float = 0, duration_api: float = 0) -> None:
         self.request_id = request_id
         self.response_json = response_json
@@ -96,7 +98,7 @@ class ResponseItemBase:
         ...
 
 
-class StreamChunkItemBase:
+class StreamChunkItemBase(ABC):
     def __init__(self, request_id: str, chunk_json: dict = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, request_json: dict = None) -> None:
         self.request_id = request_id
         self.chunk_json = chunk_json
@@ -108,6 +110,34 @@ class StreamChunkItemBase:
     @abstractmethod
     def to_accesslog(self, chunks: list, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
         ...
+
+
+class ErrorItemBase(ABC):
+    def __init__(self, request_id: str, exception: Exception, traceback_info: str, response_json: dict = None, response_headers: dict = None) -> None:
+        self.request_id = request_id
+        self.exception = exception
+        self.traceback_info = traceback_info
+        self.response_json = response_json
+        self.response_headers = response_headers
+
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        if isinstance(self.response_json, dict):
+            try:
+                raw_body = json.dumps(self.response_json, ensure_ascii=False)
+            except Exception:
+                raw_body = str(self.response_json)
+        else:
+            raw_body = str(self.response_json)
+
+        return accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="error",
+            content=f"{self.exception}\n{self.traceback_info}",
+            raw_body=raw_body,
+            raw_headers=json.dumps(self.response_headers, ensure_ascii=False) if self.response_headers else None,
+            model="error_handler"
+        )
 
 
 AccessLogBase = declarative_base(cls=_AccessLogBase)
@@ -182,6 +212,10 @@ class AccessLogWorker:
                         ))
                         # Remove chunks from buffer
                         del self.chunk_buffer[data.request_id]
+
+                # Error response
+                elif isinstance(data, ErrorItemBase):
+                    self.insert_response(data.to_accesslog(self.accesslog_cls))
 
                 # Shutdown
                 elif data is None:
