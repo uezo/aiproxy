@@ -224,6 +224,20 @@ class ReplayFilter(RequestFilterBase):
 NOTE: **Response** filter doesn't work when `stream=True`.
 
 
+## 💡 Tips
+
+- CORS: Configure CORS if you call API from web apps. https://fastapi.tiangolo.com/tutorial/cors/
+- Retry: 🦉AIProxy does not retry when API returns 5xx error because the OpenAI official client library retries. Sett `max_retries` to `ChatGPTProxy` if you call 🦉AIProxy from general HTTP client library.
+
+```python
+proxy = ChatGPTProxy(
+    api_key=args.openai_api_key,
+    access_logger_queue=worker.queue_client,
+    max_retries=2   # OpenAI's default is 2
+)
+```
+
+
 ## 🛟 Support
 
 For support, questions, or contributions, please open an issue in the GitHub repository. Please contact me directly when you need an enterprise or business support😊.
