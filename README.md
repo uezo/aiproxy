@@ -237,6 +237,21 @@ proxy = ChatGPTProxy(
 )
 ```
 
+- Database: You can use other RDBMS that is supported by SQLAlchemy. You can use them by just changing connection string. (and, install client libraries required.)
+
+Example for PostgreSQL🐘
+
+```sh
+$ pip install psycopg2-binary
+```
+
+```python
+# connection_str = "sqlite:///aiproxy.db"
+connection_str = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
+
+worker = AccessLogWorker(connection_str=connection_str)
+```
+
 
 ## 🛟 Support
 
