@@ -7,7 +7,7 @@ from time import sleep
 import traceback
 from typing import Generator, List
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
-from sqlalchemy.orm import sessionmaker, declarative_base, declared_attr
+from sqlalchemy.orm import sessionmaker, declarative_base, declared_attr, Session
 from .queueclient import DefaultQueueClient, QueueItemBase, QueueClientBase
 
 
@@ -175,41 +175,26 @@ class AccessLogWorker:
         self.queue_client = queue_client or DefaultQueueClient()
         self.chunk_buffer = {}
 
-    def insert_request(self, accesslog: _AccessLogBase):
-        db = self.get_session()
+    def insert_request(self, accesslog: _AccessLogBase, db: Session):
+        db.add(accesslog)
+        db.commit()
 
-        try:
-            db.add(accesslog)
-            db.commit()
+    def insert_response(self, accesslog: _AccessLogBase, db: Session):
+        db.add(accesslog)
+        db.commit()
 
-        except Exception as ex:
-            logger.error(f"Error at insert_request: {ex}\n{traceback.format_exc()}")
-        
-        finally:
-            db.close()
+    def use_db(self, item: QueueItemBase):
+        return not (isinstance(item, StreamChunkItemBase) and item.duration == 0)
 
-    def insert_response(self, accesslog: _AccessLogBase):
-        db = self.get_session()
-
-        try:
-            db.add(accesslog)
-            db.commit()
-
-        except Exception as ex:
-            logger.error(f"Error at insert_response: {ex}\n{traceback.format_exc()}")
-        
-        finally:
-            db.close()
-
-    def process_item(self, item: QueueItemBase):
+    def process_item(self, item: QueueItemBase, db: Session):
         try:
             # Request
             if isinstance(item, RequestItemBase):
-                self.insert_request(item.to_accesslog(self.accesslog_cls))
+                self.insert_request(item.to_accesslog(self.accesslog_cls), db)
 
             # Non-stream response
             elif isinstance(item, ResponseItemBase):
-                self.insert_response(item.to_accesslog(self.accesslog_cls))
+                self.insert_response(item.to_accesslog(self.accesslog_cls), db)
 
             # Stream response
             elif isinstance(item, StreamChunkItemBase):
@@ -223,13 +208,13 @@ class AccessLogWorker:
                     # Last chunk data for specific request_id
                     self.insert_response(item.to_accesslog(
                         self.chunk_buffer[item.request_id], self.accesslog_cls
-                    ))
+                    ), db)
                     # Remove chunks from buffer
                     del self.chunk_buffer[item.request_id]
 
             # Error response
             elif isinstance(item, ErrorItemBase):
-                self.insert_response(item.to_accesslog(self.accesslog_cls))
+                self.insert_response(item.to_accesslog(self.accesslog_cls), db)
 
         except Exception as ex:
             logger.error(f"Error at processing queue item: {ex}\n{traceback.format_exc()}")
@@ -237,13 +222,35 @@ class AccessLogWorker:
 
     def run(self):
         while True:
+            sleep(self.queue_client.dequeue_interval)
+            db = None
             try:
-                for item in self.queue_client.get():
+                items = self.queue_client.get()
+            except Exception as ex:
+                logger.error(f"Error at getting items from queue client: {ex}\n{traceback.format_exc()}")
+                continue
+
+            for item in items:
+                try:
                     if isinstance(item, WorkerShutdownItem) or item is None:
                         return
-                    self.process_item(item)
 
-            except Exception as ex:
-                logger.error(f"Error at processing loop: {ex}\n{traceback.format_exc()}")
+                    if db is None and self.use_db(item):
+                        # Get db session just once in the loop when the item that uses db found
+                        db = self.get_session()
 
-            sleep(self.queue_client.dequeue_interval)
+                    self.process_item(item, db)
+
+                except Exception as pex:
+                    logger.error(f"Error at processing loop: {pex}\n{traceback.format_exc()}")
+                    # Try to persist data in error log instead
+                    try:
+                        logger.error(f"data: {item.to_json()}")
+                    except:
+                        logger.error(f"data(to_json() failed): {str(item)}")
+
+            if db is not None:
+                try:
+                    db.close()
+                except Exception as dbex:
+                    logger.error(f"Error at closing db session: {dbex}\n{traceback.format_exc()}")
