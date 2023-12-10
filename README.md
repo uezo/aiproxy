@@ -5,6 +5,7 @@
 - ✅ Streaming support: Logs every bit of request and response data with token count – never miss a beat! 📊
 - ✅ Custom monitoring: Tailor-made for logging any specific info you fancy. Make it your own! 🔍
 - ✅ Custom filtering: Flexibly blocks access based on specific info or sends back your own responses. Be in control! 🛡️
+- ✅ Multiple AI Services: Supports ChatGPT (OpenAI and Azure OpenAI Service), Claude2 on AWS Bedrock, and is extensible by yourself! 🤖
 
 
 ## 🚀 Quick start
@@ -91,6 +92,36 @@ azure_client = openai.AsyncAzureOpenAI(
 )
 
 proxy = ChatGPTProxy(async_client=azure_client, access_logger_queue=worker.queue_client)
+```
+
+To use Claude2 on AWS Bedrock, instantiate `Claude2Proxy`.
+
+```python
+from aiproxy.claude2 import Claude2Proxy
+claude_proxy = Claude2Proxy(
+    aws_access_key_id="YOUR_AWS_ACCESS_KEY_ID",
+    aws_secret_access_key="YOUR_AWS_SECRET_ACCESS_KEY",
+    region_name="your-bedrock-region",
+    access_logger_queue=worker.queue_client
+)
+claude_proxy.add_route(app, "/model/anthropic.claude-v2")
+```
+
+Client side. We test API with boto3.
+
+```python
+import boto3
+import json
+# Make client with dummy creds
+session = boto3.Session(aws_access_key_id="dummy", aws_secret_access_key="dummy",)
+bedrock = session.client(service_name="bedrock-runtime", region_name="private", endpoint_url="http://127.0.0.1:8000")
+# Call API
+response = bedrock.invoke_model(
+    modelId="anthropic.claude-v2",
+    body=json.dumps({"prompt": "Human: うなぎとあなごの違いは？\nAssistant: ", "max_tokens_to_sample": 100})
+)
+# Show response
+print(json.loads(response["body"].read()))
 ```
 
 
