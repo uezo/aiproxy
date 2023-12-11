@@ -1,9 +1,12 @@
 import pytest
 from datetime import datetime
 import json
+import os
 from time import sleep
 from typing import Union
 from uuid import uuid4
+from fastapi.responses import JSONResponse
+from sse_starlette import EventSourceResponse
 from openai import Client, APIStatusError
 from openai.types.chat import ChatCompletion
 from aiproxy import (
@@ -14,6 +17,11 @@ from aiproxy import (
 )
 from aiproxy.accesslog import AccessLogWorker
 from aiproxy.chatgpt import ChatGPTRequestItem, ChatGPTResponseItem, ChatGPTStreamResponseItem
+
+sqlite_conn_str = "sqlite:///aiproxy_test.db"
+postgresql_conn_str = f"postgresql://{os.getenv('PSQL_USER')}:{os.getenv('PSQL_PASSWORD')}@{os.getenv('PSQL_HOST')}:{os.getenv('PSQL_PORT')}/{os.getenv('PSQL_DATABASE')}"
+
+DB_CONNECTION_STR = sqlite_conn_str
 
 # Filters for test
 class OverwriteFilter(RequestFilterBase):
@@ -113,6 +121,10 @@ def response_json():
         },
         'system_fingerprint': None
     }
+
+@pytest.fixture
+def response_headers():
+    return {"x-aiproxy-request-id": "test-id"}
 
 @pytest.fixture
 def chunks_json():
@@ -1995,9 +2007,9 @@ def test_request_item_to_from_json(messages, request_json, request_headers, func
     assert item_restore.request_headers == request_headers    
 
 
-def test_response_item_to_accesslog(response_json):
+def test_response_item_to_accesslog(response_json, response_headers):
     request_id = str(uuid4())
-    item = ChatGPTResponseItem(request_id, response_json, None, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
 
     accesslog = item.to_accesslog(AccessLog)
 
@@ -2008,7 +2020,7 @@ def test_response_item_to_accesslog(response_json):
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
     assert accesslog.raw_body == json.dumps(response_json, ensure_ascii=False)
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=True)
     assert accesslog.model == response_json["model"]
     assert accesslog.prompt_tokens == response_json["usage"]["prompt_tokens"]
     assert accesslog.completion_tokens == response_json["usage"]["completion_tokens"]
@@ -2016,13 +2028,13 @@ def test_response_item_to_accesslog(response_json):
     assert accesslog.request_time_api == item.duration_api
 
 
-def test_response_item_to_accesslog_function(response_json, functions):
+def test_response_item_to_accesslog_function(response_json, response_headers):
     request_id = str(uuid4())
 
     response_json["choices"][0]["message"]["content"] = ""
     response_json["choices"][0]["message"]["function_call"] = {"name": "get_weather", "arguments": '{\n  "location": "東京"\n}'}
     
-    item = ChatGPTResponseItem(request_id, response_json, None, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
 
     accesslog = item.to_accesslog(AccessLog)
 
@@ -2033,7 +2045,7 @@ def test_response_item_to_accesslog_function(response_json, functions):
     assert json.loads(accesslog.function_call) == response_json["choices"][0]["message"]["function_call"]
     assert accesslog.tool_calls is None
     assert accesslog.raw_body == json.dumps(response_json, ensure_ascii=False)
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
     assert accesslog.model == response_json["model"]
     assert accesslog.prompt_tokens == response_json["usage"]["prompt_tokens"]
     assert accesslog.completion_tokens == response_json["usage"]["completion_tokens"]
@@ -2041,7 +2053,7 @@ def test_response_item_to_accesslog_function(response_json, functions):
     assert accesslog.request_time_api == item.duration_api
 
 
-def test_response_item_to_accesslog_tools(response_json):
+def test_response_item_to_accesslog_tools(response_json, response_headers):
     request_id = str(uuid4())
 
     response_json["choices"][0]["message"]["content"] = ""
@@ -2050,7 +2062,7 @@ def test_response_item_to_accesslog_tools(response_json):
         {"type": "function", "function": {"name": "get_weather", "arguments": '{\n  "location": "名古屋"\n}'}},
     ]
 
-    item = ChatGPTResponseItem(request_id, response_json, None, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
 
     accesslog = item.to_accesslog(AccessLog)
 
@@ -2061,7 +2073,7 @@ def test_response_item_to_accesslog_tools(response_json):
     assert accesslog.function_call is None
     assert json.loads(accesslog.tool_calls) == response_json["choices"][0]["message"]["tool_calls"]
     assert accesslog.raw_body == json.dumps(response_json, ensure_ascii=False)
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
     assert accesslog.model == response_json["model"]
     assert accesslog.prompt_tokens == response_json["usage"]["prompt_tokens"]
     assert accesslog.completion_tokens == response_json["usage"]["completion_tokens"]
@@ -2069,7 +2081,7 @@ def test_response_item_to_accesslog_tools(response_json):
     assert accesslog.request_time_api == item.duration_api
 
 
-def test_stream_response_item_to_accesslog(chunks_json, request_json):
+def test_stream_response_item_to_accesslog(chunks_json, request_json, response_headers):
     request_id = str(uuid4())
     chunks = []
     content = ""
@@ -2078,7 +2090,7 @@ def test_stream_response_item_to_accesslog(chunks_json, request_json):
         if c["choices"] and c["choices"][0]["delta"]["content"]:
             content += c["choices"][0]["delta"]["content"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
@@ -2088,7 +2100,7 @@ def test_stream_response_item_to_accesslog(chunks_json, request_json):
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
     assert accesslog.raw_body == json.dumps(chunks_json, ensure_ascii=False)
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
     assert accesslog.model == chunks_json[0]["model"]
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
@@ -2096,7 +2108,7 @@ def test_stream_response_item_to_accesslog(chunks_json, request_json):
     assert accesslog.request_time_api == last_chunk.duration_api
 
 
-def test_stream_response_item_to_accesslog_function(chunks_function, request_json):
+def test_stream_response_item_to_accesslog_function(chunks_function, request_json, response_headers):
     request_id = str(uuid4())
     chunks = []
     function_call = {"name": "", "arguments": ""}
@@ -2107,7 +2119,7 @@ def test_stream_response_item_to_accesslog_function(chunks_function, request_jso
                 function_call["name"] = c["choices"][0]["delta"]["function_call"]["name"]
             function_call["arguments"] += c["choices"][0]["delta"]["function_call"]["arguments"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
@@ -2117,7 +2129,7 @@ def test_stream_response_item_to_accesslog_function(chunks_function, request_jso
     assert accesslog.function_call == json.dumps(function_call, ensure_ascii=False)
     assert accesslog.tool_calls is None
     assert accesslog.raw_body == json.dumps(chunks_function, ensure_ascii=False)
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
     assert accesslog.model == chunks_function[0]["model"]
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
@@ -2125,7 +2137,7 @@ def test_stream_response_item_to_accesslog_function(chunks_function, request_jso
     assert accesslog.request_time_api == last_chunk.duration_api
 
 
-def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json):
+def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json, response_headers):
     request_id = str(uuid4())
     chunks = []
     tool_calls = []
@@ -2137,7 +2149,7 @@ def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json):
             elif c["choices"][0]["delta"]["tool_calls"][0]["function"].get("arguments"):
                 tool_calls[-1]["function"]["arguments"] += c["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
@@ -2146,8 +2158,8 @@ def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json):
     assert accesslog.content == ""
     assert accesslog.function_call is None
     assert accesslog.tool_calls == json.dumps(tool_calls)
-    assert accesslog.raw_body == json.dumps(chunks_tools, ensure_ascii=True)       # これ・・・・？
-    assert accesslog.raw_headers is None
+    assert accesslog.raw_body == json.dumps(chunks_tools, ensure_ascii=False)
+    assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
     assert accesslog.model == chunks_tools[0]["model"]
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
@@ -2157,7 +2169,7 @@ def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json):
 
 @pytest.fixture
 def worker():
-    return AccessLogWorker(connection_str="sqlite:///aiproxy_test.db")
+    return AccessLogWorker(connection_str=DB_CONNECTION_STR)
 
 @pytest.fixture
 def chatgpt_proxy(worker):
@@ -2188,16 +2200,37 @@ async def test_request_filter_valuereturn(chatgpt_proxy, request_json, request_h
 
     chatgpt_proxy.add_filter(ValueReturnFilter())
 
-    ret = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
-    assert ret.choices[0].message.content == "user is required"
+    # Non-stream
+    json_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    assert isinstance(json_response, JSONResponse)
+    assert json_response.headers.get("x-aiproxy-request-id") is not None
+    ret = json.loads(json_response.body.decode())
+    assert ret["choices"][0]["message"]["content"] == "user is required"
 
     request_json["user"] = "uezo"
-    ret = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
-    assert ret.choices[0].message.content == "you can't use this service"
+    json_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    assert isinstance(json_response, JSONResponse)
+    assert json_response.headers.get("x-aiproxy-request-id") is not None
+    ret = json.loads(json_response.body.decode())
+    assert ret["choices"][0]["message"]["content"] == "you can't use this service"
 
     request_json["user"] = "unagi"
-    ret = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
-    assert ret == request_json
+    dict_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    assert isinstance(dict_response, dict)
+    assert dict_response == request_json
+
+    # Stream
+    request_json["user"] = "uezo"
+    request_json["stream"] = True
+    sse_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    assert isinstance(sse_response, EventSourceResponse)
+    assert sse_response.headers.get("x-aiproxy-request-id") is not None
+
+    request_json["user"] = "unagi"
+    request_json["stream"] = True
+    dict_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    assert isinstance(dict_response, dict)
+    assert dict_response == request_json
 
 
 @pytest.mark.asyncio
@@ -2232,7 +2265,14 @@ def test_post_content(messages, request_headers, openai_client, db):
 
     assert db_request.content == messages[-1]["content"]
     assert db_resonse.content == comp_resp.choices[0].message.content
-
+    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 def test_post_content_function(messages, request_headers, functions, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
@@ -2256,6 +2296,14 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.function_call) == function_call.model_dump()
+    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 
 def test_post_content_tools(messages, request_headers, tools, openai_client, db):
@@ -2280,6 +2328,14 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.tool_calls) == [t.model_dump() for t in tool_calls]
+    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 
 def test_post_content_apierror(messages, request_headers, openai_client, db):
@@ -2318,8 +2374,10 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
+    chunks = []
     content = ""
     for chunk in comp_resp:
+        chunks.append(chunk.model_dump())
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
             content += chunk.choices[0].delta.content
 
@@ -2331,6 +2389,14 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
 
     assert db_request.content == messages[-1]["content"]
     assert db_resonse.content == content
+    assert json.loads(db_resonse.raw_body) == chunks
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 
 def test_post_content_stream_function(messages, request_headers, functions, openai_client, db):
@@ -2344,8 +2410,10 @@ def test_post_content_stream_function(messages, request_headers, functions, open
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
+    chunks = []
     function_call = {"name": "", "arguments": ""}
     for chunk in comp_resp:
+        chunks.append(chunk.model_dump())
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.function_call:
             if chunk.choices[0].delta.function_call.name and not function_call["name"]:
                 function_call["name"] = chunk.choices[0].delta.function_call.name
@@ -2360,6 +2428,14 @@ def test_post_content_stream_function(messages, request_headers, functions, open
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.function_call) == function_call
+    assert json.loads(db_resonse.raw_body) == chunks
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 
 def test_post_content_stream_tools(messages, request_headers, tools, openai_client, db):
@@ -2373,8 +2449,10 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
+    chunks = []
     tool_calls = []
     for chunk in comp_resp:
+        chunks.append(chunk.model_dump())
         if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.tool_calls:
             if chunk.choices[0].delta.tool_calls[0].type is not None:
                 tool_calls.append({"type": "function", "function": {"name": chunk.choices[0].delta.tool_calls[0].function.name, "arguments": ""}})
@@ -2389,6 +2467,14 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.tool_calls) == tool_calls
+    assert json.loads(db_resonse.raw_body) == chunks
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    assert "openai-model" in headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in headers
 
 
 def test_post_content_stream_apierror(messages, request_headers, openai_client, db):
