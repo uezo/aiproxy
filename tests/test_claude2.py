@@ -49,8 +49,12 @@ class OverwriteResponseFilter(ResponseFilterBase):
 
 # Test data
 @pytest.fixture
-def prompt() -> list:
-    return '''\nHuman: うなぎとあなごの違いは？\nAssistant: '''
+def prompt_text() -> str:
+    return "うなぎとあなごの違いは？"
+
+@pytest.fixture
+def prompt(prompt_text) -> list:
+    return f'''Human: {prompt_text}\nAssistant: '''
 
 @pytest.fixture
 def request_json(prompt):
@@ -97,7 +101,7 @@ def chunks_json():
     ]
 
 
-def test_request_item_to_accesslog(prompt, request_json, request_headers):
+def test_request_item_to_accesslog(prompt_text, request_json, request_headers):
     request_id = str(uuid4())
     item = Claude2RequestItem(request_id, request_json, request_headers)
 
@@ -106,7 +110,7 @@ def test_request_item_to_accesslog(prompt, request_json, request_headers):
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "request"
-    assert accesslog.content == prompt
+    assert accesslog.content == prompt_text
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
     assert accesslog.raw_body == json.dumps(request_json, ensure_ascii=False)
@@ -263,7 +267,7 @@ async def test_response_filter_valuereturn(claude2_proxy, response_json):
     assert ret["completion"] == "Overwrite in filter"
 
 
-def test_post_content(prompt, request_json, request_headers, boto3_client, db):
+def test_post_content(prompt_text, request_json, request_headers, boto3_client, db):
     body = json.dumps(request_json)
     response = boto3_client.invoke_model(
         modelId="anthropic.claude-v2",
@@ -283,11 +287,11 @@ def test_post_content(prompt, request_json, request_headers, boto3_client, db):
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
-    assert db_request.content == prompt
+    assert db_request.content == prompt_text
     assert db_resonse.content == comp_resp["completion"]
 
 
-def test_post_content_apierror(prompt, request_json, request_headers, boto3_client, db):
+def test_post_content_apierror(prompt_text, request_json, request_headers, boto3_client, db):
     with pytest.raises(ClientError) as apisterr:
         request_json["extrakey"] = "extravalue"
         body = json.dumps(request_json)
@@ -311,11 +315,11 @@ def test_post_content_apierror(prompt, request_json, request_headers, boto3_clie
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()
 
-    assert db_request.content == prompt
+    assert db_request.content == prompt_text
     assert str(api_resp["ResponseMetadata"]["HTTPStatusCode"]) in db_resonse.content
 
 
-def test_post_content_stream(prompt, request_json, request_headers, boto3_client, db):
+def test_post_content_stream(prompt_text, request_json, request_headers, boto3_client, db):
     body = json.dumps(request_json)
     response = boto3_client.invoke_model_with_response_stream(
         modelId="anthropic.claude-v2",
@@ -340,11 +344,11 @@ def test_post_content_stream(prompt, request_json, request_headers, boto3_client
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
-    assert db_request.content == prompt
+    assert db_request.content == prompt_text
     assert db_resonse.content == content
 
 
-def test_post_content_stream_apierror(prompt, request_json, request_headers, boto3_client, db):
+def test_post_content_stream_apierror(prompt_text, request_json, request_headers, boto3_client, db):
     with pytest.raises(ClientError) as apisterr:
         request_json["extrakey"] = "extravalue"
         body = json.dumps(request_json)
@@ -368,5 +372,5 @@ def test_post_content_stream_apierror(prompt, request_json, request_headers, bot
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()
 
-    assert db_request.content == prompt
+    assert db_request.content == prompt_text
     assert "x-amzn-errortype" in json.loads(db_resonse.raw_headers)
