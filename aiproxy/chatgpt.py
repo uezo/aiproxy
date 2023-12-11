@@ -2,13 +2,12 @@ from datetime import datetime
 import json
 import logging
 import os
-from queue import Queue
 import time
 import traceback
 from typing import List, Union, AsyncGenerator
 from uuid import uuid4
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse, Response
+from fastapi.responses import JSONResponse
 from sse_starlette.sse import EventSourceResponse, AsyncContentStream
 from openai import AsyncClient, APIStatusError, APIResponseValidationError, APIError, OpenAIError
 from openai.types.chat import ChatCompletion
@@ -45,6 +44,7 @@ class ChatGPTResponseItem(ResponseItemBase):
         content=self.response_json["choices"][0]["message"].get("content")
         function_call=self.response_json["choices"][0]["message"].get("function_call")
         tool_calls=self.response_json["choices"][0]["message"].get("tool_calls")
+        response_headers = json.dumps(dict(self.response_headers.items()), ensure_ascii=False) if self.response_headers is not None else None
         model=self.response_json["model"]
         prompt_tokens=self.response_json["usage"]["prompt_tokens"]
         completion_tokens=self.response_json["usage"]["completion_tokens"]
@@ -57,7 +57,7 @@ class ChatGPTResponseItem(ResponseItemBase):
             function_call=json.dumps(function_call, ensure_ascii=False) if function_call is not None else None,
             tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None,
             raw_body=json.dumps(self.response_json, ensure_ascii=False),
-            raw_headers=json.dumps(self.response_headers, ensure_ascii=False) if self.response_headers else None,
+            raw_headers=response_headers,
             model=model,
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -159,6 +159,7 @@ class ChatGPTStreamResponseItem(StreamChunkItemBase):
         # Serialize
         function_call_str = json.dumps(function_call, ensure_ascii=False) if function_call is not None else None
         tool_calls_str = json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None
+        response_headers = json.dumps(dict(self.response_headers.items()), ensure_ascii=False) if self.response_headers is not None else None
 
         # Count tokens
         prompt_tokens = count_request_token(self.request_json)
@@ -178,6 +179,7 @@ class ChatGPTStreamResponseItem(StreamChunkItemBase):
             function_call=function_call_str,
             tool_calls=tool_calls_str,
             raw_body=json.dumps(chunk_jsons, ensure_ascii=False),
+            raw_headers=response_headers,
             model=chunk_jsons[0]["model"],
             prompt_tokens=prompt_tokens,
             completion_tokens=completion_tokens,
@@ -222,7 +224,7 @@ class ChatGPTProxy(ProxyBase):
                 max_retries=max_retries
             )
 
-    async def filter_request(self, request_id: str, request_json: dict, request_headers: dict) -> Union[dict, ChatCompletion, EventSourceResponse]:
+    async def filter_request(self, request_id: str, request_json: dict, request_headers: dict) -> Union[dict, JSONResponse, EventSourceResponse]:
         for f in self.request_filters:
             if json_resp := await f.filter(request_id, request_json, request_headers):
                 # Return response if filter returns string
@@ -257,11 +259,13 @@ class ChatGPTProxy(ProxyBase):
                         resp["choices"][0] = {"delta": {"content": content}, "finish_reason": "stop", "index": 0}
                         yield json.dumps(resp)
 
-                    return self.return_response_with_headers(EventSourceResponse(filter_response_stream(json_resp)), request_id)
+                    return self.return_response_with_headers(EventSourceResponse(
+                        filter_response_stream(json_resp)
+                    ), request_id)
 
                 else:
                     # Non-stream
-                    return ChatCompletion.model_validate(resp_for_log)
+                    return self.return_response_with_headers(JSONResponse(resp_for_log), request_id)
 
         return request_json
 
@@ -280,9 +284,8 @@ class ChatGPTProxy(ProxyBase):
 
     def add_route(self, app: FastAPI, base_url: str):
         @app.post(base_url)
-        async def handle_request(request: Request, response: Response):
+        async def handle_request(request: Request):
             request_id = str(uuid4())
-            self.add_response_headers(response=response, request_id=request_id)
 
             try:
                 start_time = time.time()
@@ -298,21 +301,26 @@ class ChatGPTProxy(ProxyBase):
 
                 # Filter request
                 request_json = await self.filter_request(request_id, request_json, request_headers)
-                if isinstance(request_json, ChatCompletion) or isinstance(request_json, EventSourceResponse):
+                if isinstance(request_json, JSONResponse) or isinstance(request_json, EventSourceResponse):
                     return request_json
 
                 # Call API
                 start_time_api = time.time()
                 if self.client.api_key != self._empty_openai_api_key:
                     # Always use server api key if set to client
-                    completion_response = await self.client.chat.completions.create(**request_json)
+                    raw_response = await self.client.chat.completions.with_raw_response.create(**request_json)
                 elif user_auth_header := request_headers.get("authorization"):  # Lower case from client.
-                    completion_response = await self.client.chat.completions.create(
+                    raw_response = await self.client.chat.completions.with_raw_response.create(
                         **request_json, extra_headers={"Authorization": user_auth_header}   # Pascal to server
                     )
                 else:
                     # Call API anyway ;)
-                    completion_response = await self.client.chat.completions.create(**request_json)
+                    raw_response = await self.client.chat.completions.with_raw_response.create(**request_json)
+
+                completion_response = raw_response.parse()
+                completion_response_headers = raw_response.headers
+                if "content-encoding" in completion_response_headers:
+                    completion_response_headers.pop("content-encoding") # Remove "br" that will be changed by this proxy
 
                 # Handling response from API
                 if request_json.get("stream"):
@@ -332,12 +340,16 @@ class ChatGPTProxy(ProxyBase):
                             now = time.time()
                             self.access_logger_queue.put(ChatGPTStreamResponseItem(
                                 request_id=request_id,
+                                response_headers=completion_response_headers,
                                 duration=now - start_time,
                                 duration_api=now - start_time_api,
                                 request_json=request_json
                             ))
 
-                    return self.return_response_with_headers(EventSourceResponse(process_stream(completion_response)), request_id)
+                    return self.return_response_with_headers(EventSourceResponse(
+                        process_stream(completion_response),
+                        headers=completion_response_headers
+                    ), request_id)
 
                 else:
                     duration_api = time.time() - start_time_api
@@ -349,11 +361,20 @@ class ChatGPTProxy(ProxyBase):
                     self.access_logger_queue.put(ChatGPTResponseItem(
                         request_id=request_id,
                         response_json=completion_response.model_dump(),
+                        response_headers=completion_response_headers,
                         duration=time.time() - start_time,
                         duration_api=duration_api
                     ))
 
-                    return completion_response
+                    return self.return_response_with_headers(JSONResponse(
+                        content=completion_response.model_dump(),
+                        headers=completion_response_headers
+                    ), request_id)
+
+                    return self.return_response_with_headers(JSONResponse(
+                        content=completion_response.model_dump(),
+                        headers=completion_response_headers
+                    ), request_id)
 
             # Error handlers
             except RequestFilterException as rfex:
@@ -385,7 +406,6 @@ class ChatGPTProxy(ProxyBase):
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
-
 
             except (APIStatusError, APIResponseValidationError) as status_err:
                 logger.error(f"APIStatusError from ChatGPT: {status_err}\n{traceback.format_exc()}")
