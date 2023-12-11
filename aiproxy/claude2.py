@@ -23,11 +23,17 @@ logger = logging.getLogger(__name__)
 
 class Claude2RequestItem(RequestItemBase):
     def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        try:
+            content = self.request_json["prompt"].split("Human:")[-1].split("Assistant:")[0].strip()
+        except:
+            logger.error(f"Error at parsing prompt text for log: {self.request_json.get('prompt')}")
+            content = None
+
         return accesslog_cls(
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="request",
-            content=self.request_json["prompt"],
+            content=content,
             raw_body=json.dumps(self.request_json, ensure_ascii=False),
             raw_headers=json.dumps(self.request_headers, ensure_ascii=False),
             model="anthropic.claude-v2"
