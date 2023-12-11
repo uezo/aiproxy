@@ -139,13 +139,14 @@ def test_request_item_to_from_json(prompt, request_json, request_headers):
 
 def test_response_item_to_accesslog(response_json, response_headers_json):
     request_id = str(uuid4())
-    item = Claude2ResponseItem(request_id, response_json, response_headers_json, 1.0, 2.0)
+    item = Claude2ResponseItem(request_id, response_json, response_headers_json, 1.0, 2.0, 200)
 
     accesslog = item.to_accesslog(AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == response_json["completion"]
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
@@ -166,12 +167,13 @@ def test_stream_response_item_to_accesslog(chunks_json, response_headers_stream_
         chunks.append(Claude2StreamResponseItem(request_id, c))
         content += c.get("completion", "")
 
-    last_chunk = Claude2StreamResponseItem(request_id, response_headers=response_headers_stream_json, duration=1.0, duration_api=2.0, request_json=request_json)
+    last_chunk = Claude2StreamResponseItem(request_id, response_headers=response_headers_stream_json, duration=1.0, duration_api=2.0, request_json=request_json, status_code=200)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == content
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
@@ -289,6 +291,7 @@ def test_post_content(prompt_text, request_json, request_headers, boto3_client, 
 
     assert db_request.content == prompt_text
     assert db_resonse.content == comp_resp["completion"]
+    assert db_resonse.status_code == response["ResponseMetadata"]["HTTPStatusCode"]
 
 
 def test_post_content_apierror(prompt_text, request_json, request_headers, boto3_client, db):
@@ -317,6 +320,7 @@ def test_post_content_apierror(prompt_text, request_json, request_headers, boto3
 
     assert db_request.content == prompt_text
     assert str(api_resp["ResponseMetadata"]["HTTPStatusCode"]) in db_resonse.content
+    assert db_resonse.status_code == api_resp["ResponseMetadata"]["HTTPStatusCode"]
 
 
 def test_post_content_stream(prompt_text, request_json, request_headers, boto3_client, db):
@@ -346,6 +350,7 @@ def test_post_content_stream(prompt_text, request_json, request_headers, boto3_c
 
     assert db_request.content == prompt_text
     assert db_resonse.content == content
+    assert db_resonse.status_code == response["ResponseMetadata"]["HTTPStatusCode"]
 
 
 def test_post_content_stream_apierror(prompt_text, request_json, request_headers, boto3_client, db):
@@ -374,3 +379,4 @@ def test_post_content_stream_apierror(prompt_text, request_json, request_headers
 
     assert db_request.content == prompt_text
     assert "x-amzn-errortype" in json.loads(db_resonse.raw_headers)
+    assert db_resonse.status_code == api_resp["ResponseMetadata"]["HTTPStatusCode"]

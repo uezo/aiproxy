@@ -46,6 +46,7 @@ class Claude2ResponseItem(ResponseItemBase):
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="response",
+            status_code=self.status_code,
             content=self.response_json["completion"],
             function_call=None,
             tool_calls=None,
@@ -85,6 +86,7 @@ class Claude2StreamResponseItem(StreamChunkItemBase):
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="error" if self.response_headers.get("x-amzn-errortype") else "response",
+            status_code=self.status_code,
             content=response_content,
             function_call=None,
             tool_calls=None,
@@ -156,7 +158,8 @@ class Claude2Proxy(ProxyBase):
                     response_headers={
                         "x-amzn-bedrock-input-token-count": 0,
                         "x-amzn-bedrock-output-token-count": 0
-                    }
+                    },
+                    status_code=400 if stream else 200
                 ))
 
                 if stream:
@@ -245,7 +248,8 @@ class Claude2Proxy(ProxyBase):
                                 response_headers=dict(stream_response.headers.items()),
                                 duration=now - start_time,
                                 duration_api=now - start_time_api,
-                                request_json=request_json
+                                request_json=request_json,
+                                status_code=status_code
                             ))
 
                     stream_request = httpx.Request(method="POST", url=url, headers=dict(aws_request_header), json=request_json)
@@ -286,7 +290,8 @@ class Claude2Proxy(ProxyBase):
                         response_json=filtered_response_json,
                         response_headers=dict(json_response.headers.items()),
                         duration=time.time() - start_time,
-                        duration_api=duration_api
+                        duration_api=duration_api,
+                        status_code=completion_response.status_code
                     ))
 
                     return json_response
@@ -302,7 +307,8 @@ class Claude2Proxy(ProxyBase):
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=rfex.status_code
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
@@ -317,7 +323,8 @@ class Claude2Proxy(ProxyBase):
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=rfex.status_code
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
@@ -338,7 +345,8 @@ class Claude2Proxy(ProxyBase):
                     request_id=request_id,
                     exception=htex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=htex.response.status_code
                 ))
 
                 htex.response.headers.pop("content-length")
@@ -359,7 +367,8 @@ class Claude2Proxy(ProxyBase):
                     request_id=request_id,
                     exception=ex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=502
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)

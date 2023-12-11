@@ -53,6 +53,7 @@ class ChatGPTResponseItem(ResponseItemBase):
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="response",
+            status_code=self.status_code,
             content=content,
             function_call=json.dumps(function_call, ensure_ascii=False) if function_call is not None else None,
             tool_calls=json.dumps(tool_calls, ensure_ascii=False) if tool_calls is not None else None,
@@ -175,6 +176,7 @@ class ChatGPTStreamResponseItem(StreamChunkItemBase):
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="response",
+            status_code=self.status_code,
             content=response_content,
             function_call=function_call_str,
             tool_calls=tool_calls_str,
@@ -239,7 +241,8 @@ class ChatGPTProxy(ProxyBase):
                 # Response log
                 self.access_logger_queue.put(ChatGPTResponseItem(
                     request_id=request_id,
-                    response_json=resp_for_log
+                    response_json=resp_for_log,
+                    status_code=200
                 ))
 
                 if request_json.get("stream"):
@@ -319,6 +322,7 @@ class ChatGPTProxy(ProxyBase):
 
                 completion_response = raw_response.parse()
                 completion_response_headers = raw_response.headers
+                completion_status_code = raw_response.status_code
                 if "content-encoding" in completion_response_headers:
                     completion_response_headers.pop("content-encoding") # Remove "br" that will be changed by this proxy
 
@@ -343,7 +347,8 @@ class ChatGPTProxy(ProxyBase):
                                 response_headers=completion_response_headers,
                                 duration=now - start_time,
                                 duration_api=now - start_time_api,
-                                request_json=request_json
+                                request_json=request_json,
+                                status_code=completion_status_code
                             ))
 
                     return self.return_response_with_headers(EventSourceResponse(
@@ -363,7 +368,8 @@ class ChatGPTProxy(ProxyBase):
                         response_json=completion_response.model_dump(),
                         response_headers=completion_response_headers,
                         duration=time.time() - start_time,
-                        duration_api=duration_api
+                        duration_api=duration_api,
+                        status_code=completion_status_code
                     ))
 
                     return self.return_response_with_headers(JSONResponse(
@@ -387,7 +393,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=rfex.status_code
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
@@ -402,7 +409,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=rfex.status_code
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=rfex.status_code), request_id)
@@ -420,7 +428,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=status_err,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=status_err.status_code
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=status_err.status_code), request_id)
@@ -435,7 +444,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=api_err,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=502
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
@@ -450,7 +460,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=oai_err,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=502
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
@@ -465,7 +476,8 @@ class ChatGPTProxy(ProxyBase):
                     request_id=request_id,
                     exception=ex,
                     traceback_info=traceback.format_exc(),
-                    response_json=resp_json
+                    response_json=resp_json,
+                    status_code=502
                 ))
 
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=502), request_id)
