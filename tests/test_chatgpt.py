@@ -2009,13 +2009,14 @@ def test_request_item_to_from_json(messages, request_json, request_headers, func
 
 def test_response_item_to_accesslog(response_json, response_headers):
     request_id = str(uuid4())
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
 
     accesslog = item.to_accesslog(AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == response_json["choices"][0]["message"]["content"]
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
@@ -2034,13 +2035,14 @@ def test_response_item_to_accesslog_function(response_json, response_headers):
     response_json["choices"][0]["message"]["content"] = ""
     response_json["choices"][0]["message"]["function_call"] = {"name": "get_weather", "arguments": '{\n  "location": "東京"\n}'}
     
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
 
     accesslog = item.to_accesslog(AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == ""
     assert json.loads(accesslog.function_call) == response_json["choices"][0]["message"]["function_call"]
     assert accesslog.tool_calls is None
@@ -2062,13 +2064,14 @@ def test_response_item_to_accesslog_tools(response_json, response_headers):
         {"type": "function", "function": {"name": "get_weather", "arguments": '{\n  "location": "名古屋"\n}'}},
     ]
 
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0)
+    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
 
     accesslog = item.to_accesslog(AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == ""
     assert accesslog.function_call is None
     assert json.loads(accesslog.tool_calls) == response_json["choices"][0]["message"]["tool_calls"]
@@ -2090,12 +2093,13 @@ def test_stream_response_item_to_accesslog(chunks_json, request_json, response_h
         if c["choices"] and c["choices"][0]["delta"]["content"]:
             content += c["choices"][0]["delta"]["content"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == content
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
@@ -2119,12 +2123,13 @@ def test_stream_response_item_to_accesslog_function(chunks_function, request_jso
                 function_call["name"] = c["choices"][0]["delta"]["function_call"]["name"]
             function_call["arguments"] += c["choices"][0]["delta"]["function_call"]["arguments"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == ""
     assert accesslog.function_call == json.dumps(function_call, ensure_ascii=False)
     assert accesslog.tool_calls is None
@@ -2149,12 +2154,13 @@ def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json, res
             elif c["choices"][0]["delta"]["tool_calls"][0]["function"].get("arguments"):
                 tool_calls[-1]["function"]["arguments"] += c["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers)
+    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
     accesslog = last_chunk.to_accesslog(chunks, AccessLog)
 
     assert accesslog.request_id == request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
+    assert accesslog.status_code == 200
     assert accesslog.content == ""
     assert accesslog.function_call is None
     assert accesslog.tool_calls == json.dumps(tool_calls)
@@ -2271,8 +2277,10 @@ def test_post_content(messages, request_headers, openai_client, db):
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 def test_post_content_function(messages, request_headers, functions, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
@@ -2302,9 +2310,10 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
-
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 def test_post_content_tools(messages, request_headers, tools, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
@@ -2334,8 +2343,10 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 
 def test_post_content_apierror(messages, request_headers, openai_client, db):
@@ -2361,6 +2372,7 @@ def test_post_content_apierror(messages, request_headers, openai_client, db):
 
     assert db_request.content == messages[-1]["content"]
     assert str(apisterr.value) in db_resonse.content
+    assert db_resonse.status_code == api_resp.status_code
 
 
 def test_post_content_stream(messages, request_headers, openai_client, db):
@@ -2395,8 +2407,10 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 
 def test_post_content_stream_function(messages, request_headers, functions, openai_client, db):
@@ -2434,8 +2448,10 @@ def test_post_content_stream_function(messages, request_headers, functions, open
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 
 def test_post_content_stream_tools(messages, request_headers, tools, openai_client, db):
@@ -2473,8 +2489,10 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
     # 'server': 'uvicorn, cloudflare'
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
-    assert "openai-model" in headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in headers
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
 
 
 def test_post_content_stream_apierror(messages, request_headers, openai_client, db):
@@ -2500,3 +2518,4 @@ def test_post_content_stream_apierror(messages, request_headers, openai_client, 
 
     assert db_request.content == messages[-1]["content"]
     assert str(apisterr.value) in db_resonse.content
+    assert db_resonse.status_code == api_resp.status_code

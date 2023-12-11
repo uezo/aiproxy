@@ -1,11 +1,9 @@
-from abc import ABC, abstractmethod
-from collections.abc import Iterable
+from abc import abstractmethod
 from datetime import datetime
 import json
 import logging
 from time import sleep
 import traceback
-from typing import Generator, List
 from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, declared_attr, Session
 from .queueclient import DefaultQueueClient, QueueItemBase, QueueClientBase
@@ -34,6 +32,10 @@ class _AccessLogBase:
     @declared_attr
     def direction(cls):
         return Column(String)
+
+    @declared_attr
+    def status_code(cls):
+        return Column(Integer)
 
     @declared_attr
     def content(cls):
@@ -89,12 +91,13 @@ class RequestItemBase(QueueItemBase):
 
 
 class ResponseItemBase(QueueItemBase):
-    def __init__(self, request_id: str, response_json: dict, response_headers: dict = None, duration: float = 0, duration_api: float = 0) -> None:
+    def __init__(self, request_id: str, response_json: dict, response_headers: dict = None, duration: float = 0, duration_api: float = 0, status_code: int = 0) -> None:
         self.request_id = request_id
         self.response_json = response_json
         self.response_headers = response_headers
         self.duration = duration
         self.duration_api = duration_api
+        self.status_code = status_code
 
     @abstractmethod
     def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
@@ -102,13 +105,14 @@ class ResponseItemBase(QueueItemBase):
 
 
 class StreamChunkItemBase(QueueItemBase):
-    def __init__(self, request_id: str, chunk_json: dict = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, request_json: dict = None) -> None:
+    def __init__(self, request_id: str, chunk_json: dict = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, request_json: dict = None, status_code: int = 0) -> None:
         self.request_id = request_id
         self.chunk_json = chunk_json
         self.response_headers = response_headers
         self.duration = duration
         self.duration_api = duration_api
         self.request_json = request_json
+        self.status_code = status_code
 
     @abstractmethod
     def to_accesslog(self, chunks: list, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
@@ -116,12 +120,13 @@ class StreamChunkItemBase(QueueItemBase):
 
 
 class ErrorItemBase(QueueItemBase):
-    def __init__(self, request_id: str, exception: Exception, traceback_info: str, response_json: dict = None, response_headers: dict = None) -> None:
+    def __init__(self, request_id: str, exception: Exception, traceback_info: str, response_json: dict = None, response_headers: dict = None, status_code: int = 0) -> None:
         self.request_id = request_id
         self.exception = exception
         self.traceback_info = traceback_info
         self.response_json = response_json
         self.response_headers = response_headers
+        self.status_code = status_code
 
     def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
         if isinstance(self.response_json, dict):
@@ -139,7 +144,8 @@ class ErrorItemBase(QueueItemBase):
             content=f"{self.exception}\n{self.traceback_info}",
             raw_body=raw_body,
             raw_headers=json.dumps(self.response_headers, ensure_ascii=False) if self.response_headers else None,
-            model="error_handler"
+            model="error_handler",
+            status_code=self.status_code
         )
 
     def to_dict(self) -> dict:
