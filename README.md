@@ -260,6 +260,7 @@ NOTE: **Response** filter doesn't work when `stream=True`.
 
 We provide an Apache Superset template as our express dashboard. Please follow the steps below to set up.
 
+![🦉AIProxy dashboard powered by Apache Superset](https://uezo.blob.core.windows.net/github/aiproxy/dashboard.png)
 
 Install Superset.
 
