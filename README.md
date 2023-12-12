@@ -2,10 +2,11 @@
 
 🦉 **AIProxy** is a Python library that serves as a reverse proxy for the ChatGPT API. It provides enhanced features like monitoring, logging, and filtering requests and responses. This library is especially useful for developers and administrators who need detailed oversight and control over the interaction with ChatGPT API.
 
-- ✅ Streaming support: Logs every bit of request and response data with token count – never miss a beat! 📊
+- ✅ Streaming support: Logs every bit of request and response data with token count – never miss a beat! 💓
 - ✅ Custom monitoring: Tailor-made for logging any specific info you fancy. Make it your own! 🔍
 - ✅ Custom filtering: Flexibly blocks access based on specific info or sends back your own responses. Be in control! 🛡️
 - ✅ Multiple AI Services: Supports ChatGPT (OpenAI and Azure OpenAI Service), Claude2 on AWS Bedrock, and is extensible by yourself! 🤖
+- ✅ Express dashboard: We provide template for [Apache Superset](https://superset.apache.org) that's ready to use right out of the box – get insights quickly and efficiently!  📊
 
 
 ## 🚀 Quick start
@@ -253,6 +254,66 @@ class ReplayFilter(RequestFilterBase):
 `request_id` is included in HTTP response headers as `x-aiproxy-request-id`.
 
 NOTE: **Response** filter doesn't work when `stream=True`.
+
+
+## 📊 Dashboard
+
+We provide an Apache Superset template as our express dashboard. Please follow the steps below to set up.
+
+
+Install Superset.
+
+```sh
+$ pip install apache-superset
+```
+
+Get dashboard.zip from release page and extract it to the same directory as aiproxy.db.
+
+https://github.com/uezo/aiproxy/releases/tag/v0.3.0
+
+
+Set required environment variables.
+
+```sh
+$ export SUPERSET_CONFIG_PATH=$(pwd)/dashboard/superset_config.py
+$ export FLASK_APP=superset
+```
+
+Make database.
+
+```sh
+$ superset db upgrade
+```
+
+Create admin user. Change username and password as you like.
+
+```sh
+$ superset fab create-admin --username admin --firstname AIProxyAdmin --lastname AIProxyAdmin --email admin@localhost --password admin
+```
+
+Initialize Superset.
+
+```sh
+$ superset init
+```
+
+Import 🦉AIProxy dashboard template. Execute this command in the same directory as aiproxy.db. If you execute from a different location, open the Database connections page in the Superset after completing these steps and modify the database connection string to the absolute path.
+
+```sh
+$ superset import-directory dashboard/resources
+```
+
+Start Superset.
+
+```sh
+$ superset run -p 8088
+```
+
+Open and customize the dashboard to your liking, including the metrics you want to monitor and their conditions.👍
+
+http://localhost:8088
+
+📕 Superset official docs: https://superset.apache.org/docs/intro
 
 
 ## 💡 Tips

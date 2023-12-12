@@ -1,0 +1,65 @@
+dashboard_title: AIProxy
+description: null
+css: null
+slug: null
+uuid: 4b830f93-4220-4bd4-9b29-bd39e69fac1c
+position:
+  DASHBOARD_VERSION_KEY: v2
+  ROOT_ID:
+    children:
+    - GRID_ID
+    id: ROOT_ID
+    type: ROOT
+  GRID_ID:
+    children:
+    - ROW-N-V52QEDIZ
+    id: GRID_ID
+    parents:
+    - ROOT_ID
+    type: GRID
+  HEADER_ID:
+    id: HEADER_ID
+    meta:
+      text: AIProxy
+    type: HEADER
+  ROW-N-V52QEDIZ:
+    children:
+    - CHART-4V5M38VS
+    - CHART-RDHQ6DM9
+    id: ROW-N-V52QEDIZ
+    meta:
+      '0': ROOT_ID
+      background: BACKGROUND_TRANSPARENT
+    type: ROW
+    parents:
+    - ROOT_ID
+    - GRID_ID
+  CHART-4V5M38VS:
+    children: []
+    id: CHART-4V5M38VS
+    meta:
+      chartId: 2
+      height: 50
+      sliceName: "\U0001F50DAIProxy Log Viewer"
+      uuid: f47067c1-01e7-4428-8db5-6255d996c72a
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-V52QEDIZ
+  CHART-RDHQ6DM9:
+    children: []
+    id: CHART-RDHQ6DM9
+    meta:
+      chartId: 1
+      height: 50
+      sliceName: "\U0001F989AIProxy Access Log Analyzer"
+      uuid: 0461baa3-d909-4c06-88c3-f538c14befd6
+      width: 4
+    type: CHART
+    parents:
+    - ROOT_ID
+    - GRID_ID
+    - ROW-N-V52QEDIZ
+version: 1.0.0

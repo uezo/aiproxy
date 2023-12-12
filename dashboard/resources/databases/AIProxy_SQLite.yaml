@@ -1,0 +1,13 @@
+database_name: AIProxy (SQLite)
+sqlalchemy_uri: sqlite:///aiproxy.db
+cache_timeout: null
+expose_in_sqllab: true
+allow_run_async: false
+allow_ctas: false
+allow_cvas: false
+allow_dml: false
+allow_file_upload: false
+extra:
+  allows_virtual_table_explore: true
+uuid: 83adcf20-8319-4e37-b267-0ebd6b19cadd
+version: 1.0.0
