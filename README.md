@@ -1,6 +1,6 @@
 # 🦉 AIProxy
 
-🦉 **AIProxy** is a Python library that serves as a reverse proxy for the ChatGPT API. It provides enhanced features like monitoring, logging, and filtering requests and responses. This library is especially useful for developers and administrators who need detailed oversight and control over the interaction with ChatGPT API.
+🦉 **AIProxy** is a Python library that serves as a reverse proxy LLM APIs including ChatGPT and Claude2. It provides enhanced features like monitoring, logging, and filtering requests and responses. This library is especially useful for developers and administrators who need detailed oversight and control over the interaction with LLM APIs.
 
 - ✅ Streaming support: Logs every bit of request and response data with token count – never miss a beat! 💓
 - ✅ Custom monitoring: Tailor-made for logging any specific info you fancy. Make it your own! 🔍
@@ -8,6 +8,7 @@
 - ✅ Multiple AI Services: Supports ChatGPT (OpenAI and Azure OpenAI Service), Claude2 on AWS Bedrock, and is extensible by yourself! 🤖
 - ✅ Express dashboard: We provide template for [Apache Superset](https://superset.apache.org) that's ready to use right out of the box – get insights quickly and efficiently!  📊
 
+![Features overview](https://uezo.blob.core.windows.net/github/aiproxy/aiproxy_overview.png)
 
 ## 🚀 Quick start
 
@@ -319,8 +320,14 @@ http://localhost:8088
 
 ## 💡 Tips
 
-- CORS: Configure CORS if you call API from web apps. https://fastapi.tiangolo.com/tutorial/cors/
-- Retry: 🦉AIProxy does not retry when API returns 5xx error because the OpenAI official client library retries. Sett `max_retries` to `ChatGPTProxy` if you call 🦉AIProxy from general HTTP client library.
+### CORS
+
+Configure CORS if you call API from web apps. https://fastapi.tiangolo.com/tutorial/cors/
+
+
+### Retry
+
+🦉AIProxy does not retry when API returns 5xx error because the OpenAI official client library retries. Sett `max_retries` to `ChatGPTProxy` if you call 🦉AIProxy from general HTTP client library.
 
 ```python
 proxy = ChatGPTProxy(
@@ -330,7 +337,9 @@ proxy = ChatGPTProxy(
 )
 ```
 
-- Database: You can use other RDBMS that is supported by SQLAlchemy. You can use them by just changing connection string. (and, install client libraries required.)
+### Database
+
+You can use other RDBMS that is supported by SQLAlchemy. You can use them by just changing connection string. (and, install client libraries required.)
 
 Example for PostgreSQL🐘
 
@@ -344,6 +353,15 @@ connection_str = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
 
 worker = AccessLogWorker(connection_str=connection_str)
 ```
+
+
+### Restrictions
+
+| Features | ChatGPT | ChatGPT<br>Stream | Claude2 | Claude2<br>Stream |
+| ---- | ---- | ---- | ---- | ---- |
+| Request filter | ✅ | ✅ | ✅ | Instant response is non-stream with status code 400 |
+| Response filter | ✅ | N/A | ✅ | N/A |
+| API keys | Server/Client | Server/Client | Server | Server |
 
 
 ## 🛟 Support
