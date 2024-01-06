@@ -7,15 +7,17 @@ from typing import Union
 from uuid import uuid4
 from fastapi.responses import JSONResponse
 from sse_starlette import EventSourceResponse
+from sqlalchemy import Column, String
 from openai import Client, APIStatusError
 from openai.types.chat import ChatCompletion
 from aiproxy import (
     AccessLog,
     RequestFilterBase,
     ResponseFilterBase,
-    ChatGPTProxy
+    ChatGPTProxy,
+    AccessLogBase
 )
-from aiproxy.accesslog import AccessLogWorker
+from aiproxy.accesslog import AccessLogWorker, _AccessLogBase
 from aiproxy.chatgpt import ChatGPTRequestItem, ChatGPTResponseItem, ChatGPTStreamResponseItem
 
 sqlite_conn_str = "sqlite:///aiproxy_test.db"
@@ -48,6 +50,22 @@ class OverwriteResponseFilter(ResponseFilterBase):
     async def filter(self, request_id: str, response_json: dict) -> Union[dict, None]:
         response_json["choices"][0]["message"]["content"] = "Overwrite in filter"
         return response_json
+
+# Custom log and item for test
+class MyAccessLog(AccessLogBase):
+    user_id = Column(String)
+    ip_address = Column(String)
+    device_id = Column(String)
+
+
+class MyChatGPTRequestItem(ChatGPTRequestItem):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        accesslog = super().to_accesslog(accesslog_cls)
+        accesslog.ip_address = self.request_headers.get("X-Real-IP")
+        accesslog.user_id = self.request_headers.get("X-OshaberiAI-UID")
+        accesslog.device_id = self.request_headers.get("X-OshaberiAI-DID")
+
+        return accesslog
 
 
 # Test data
@@ -2281,6 +2299,48 @@ def test_post_content(messages, request_headers, openai_client, db):
     assert "openai-model" in db_headers
     assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
     assert db_resonse.status_code == api_resp.status_code
+
+# NOTE: Restart AIProxy instance with custom log worker before this case
+def test_post_content_custom_log(messages, request_headers, openai_client, db):
+    extra_headers = {
+        "x-user-id": "user_1234567890",
+        "x-device-id": "device_1234567890",
+        "x-ip-address": "111.222.333.444"
+    }
+
+    api_resp = openai_client.chat.completions.with_raw_response.create(
+        model="gpt-3.5-turbo", messages=messages, extra_headers=extra_headers
+    )
+
+    comp_resp = api_resp.parse()
+    headers = api_resp.headers
+    request_id = headers.get("x-aiproxy-request-id")
+
+    assert request_id is not None
+    assert "天気" in comp_resp.choices[0].message.content
+
+    # Wait for processing queued items
+    sleep(2.0)
+
+    db_request = db.query(MyAccessLog).where(MyAccessLog.request_id == request_id, MyAccessLog.direction == "request").first()
+    db_resonse = db.query(MyAccessLog).where(MyAccessLog.request_id == request_id, MyAccessLog.direction == "response").first()
+
+    assert db_request.content == messages[-1]["content"]
+    assert db_resonse.content == comp_resp.choices[0].message.content
+    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
+    # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
+    # 'server': 'uvicorn, cloudflare'
+    # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
+    # Check some headear items
+    db_headers = json.loads(db_resonse.raw_headers)
+    assert "openai-model" in db_headers
+    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert db_resonse.status_code == api_resp.status_code
+
+    assert db_request.user_id == extra_headers["x-user-id"]
+    assert db_request.device_id == extra_headers["x-device-id"]
+    assert db_request.ip_address == extra_headers["x-ip-address"]
 
 def test_post_content_function(messages, request_headers, functions, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
