@@ -131,7 +131,7 @@ print(json.loads(response["body"].read()))
 
 By default, see `accesslog` table in `aiproxy.db`. If you want to use other RDBMS like PostgreSQL, set SQLAlchemy-formatted connection string as `connection_str` argument when instancing `AccessLogWorker`.
 
-And, you can make custom logger as below:
+And, you can customize log format as below:
 
 This is an example to add `user` column to request log. In this case, the customized log are stored into table named `customaccesslog`, the lower case of your custom access log class.
 
@@ -145,31 +145,20 @@ from aiproxy.accesslog import AccessLogBase, AccessLogWorker
 class CustomAccessLog(AccessLogBase):
     user = Column(String)
 
-class CustomAccessLogWorker(AccessLogWorker):
-    def insert_request(self, request_id: str, request_json: dict, request_headers: dict):
-        db = self.get_session()
+class CustomGPTRequestItem(ChatGPTRequestItem):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        accesslog = super().to_accesslog(accesslog_cls)
 
-        try:
-            db.add(self.accesslog_cls(
-                request_id=request_id,
-                created_at=datetime.utcnow(),
-                direction="request",
-                user=request_json.get("user"),  # 🌟 new column
-                content=request_json["messages"][-1]["content"],
-                raw_body=json.dumps(request_json, ensure_ascii=False),
-                raw_headers=json.dumps(request_headers),
-                model=request_json.get("model")
-            ))
-            db.commit()
-        
-        except Exception as ex:
-            logger.error(f"Error at insert_request: {ex}\n{traceback.format_exc()}")
-        
-        finally:
-            db.close()
+        # In this case, set value of "x-user-id" in request header to newly added colmun "user"
+        accesslog.user = self.request_headers.get("x-user-id")
 
-# Enable your custom accesslog
+        return accesslog
+
+# Use your custom accesslog
 worker = CustomAccessLogWorker(accesslog_cls=CustomAccessLog)
+
+# Use your custom request item
+proxy = ChatGPTProxy(access_logger_queue=worker.queue_client, request_item_class=CustomGPTRequestItem)
 ```
 
 NOTE: By default `AccessLog`, OpenAI API Key in the request headers is masked.

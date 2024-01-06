@@ -209,13 +209,23 @@ class ChatGPTProxy(ProxyBase):
         max_retries: int = 0,
         request_filters: List[RequestFilterBase] = None,
         response_filters: List[ResponseFilterBase] = None,
-        access_logger_queue: QueueClientBase
+        request_item_class: type = ChatGPTRequestItem,
+        response_item_class: type = ChatGPTResponseItem,
+        stream_response_item_class: type = ChatGPTStreamResponseItem,
+        error_item_class: type = ChatGPTErrorItem,
+        access_logger_queue: QueueClientBase,
     ):
         super().__init__(
             request_filters=request_filters,
             response_filters=response_filters,
             access_logger_queue=access_logger_queue
         )
+
+        # Log items
+        self.request_item_class = request_item_class
+        self.response_item_class = response_item_class
+        self.stream_response_item_class = stream_response_item_class
+        self.error_item_class = error_item_class
 
         # ChatGPT client
         if async_client:
@@ -239,7 +249,7 @@ class ChatGPTProxy(ProxyBase):
                     "usage": {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
                 }
                 # Response log
-                self.access_logger_queue.put(ChatGPTResponseItem(
+                self.access_logger_queue.put(self.response_item_class(
                     request_id=request_id,
                     response_json=resp_for_log,
                     status_code=200
@@ -296,7 +306,7 @@ class ChatGPTProxy(ProxyBase):
                 request_headers = dict(request.headers.items())
 
                 # Log request
-                self.access_logger_queue.put(ChatGPTRequestItem(
+                self.access_logger_queue.put(self.request_item_class(
                     request_id=request_id,
                     request_json=request_json,
                     request_headers=request_headers
@@ -332,7 +342,7 @@ class ChatGPTProxy(ProxyBase):
                         # Async content generator
                         try:
                             async for chunk in stream:
-                                self.access_logger_queue.put(ChatGPTStreamResponseItem(
+                                self.access_logger_queue.put(self.stream_response_item_class(
                                     request_id=request_id,
                                     chunk_json=chunk.model_dump()
                                 ))
@@ -342,7 +352,7 @@ class ChatGPTProxy(ProxyBase):
                         finally:
                             # Response log
                             now = time.time()
-                            self.access_logger_queue.put(ChatGPTStreamResponseItem(
+                            self.access_logger_queue.put(self.stream_response_item_class(
                                 request_id=request_id,
                                 response_headers=completion_response_headers,
                                 duration=now - start_time,
@@ -363,7 +373,7 @@ class ChatGPTProxy(ProxyBase):
                     completion_response = await self.filter_response(request_id, completion_response)
 
                     # Response log
-                    self.access_logger_queue.put(ChatGPTResponseItem(
+                    self.access_logger_queue.put(self.response_item_class(
                         request_id=request_id,
                         response_json=completion_response.model_dump(),
                         response_headers=completion_response_headers,
@@ -389,7 +399,7 @@ class ChatGPTProxy(ProxyBase):
                 resp_json = {"error": {"message": rfex.message, "type": "request_filter_error", "param": None, "code": None}}
 
                 # Error log
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
@@ -405,7 +415,7 @@ class ChatGPTProxy(ProxyBase):
                 resp_json = {"error": {"message": rfex.message, "type": "response_filter_error", "param": None, "code": None}}
 
                 # Error log
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=rfex,
                     traceback_info=traceback.format_exc(),
@@ -424,7 +434,7 @@ class ChatGPTProxy(ProxyBase):
                 except:
                     resp_json = str(status_err.response.content)
 
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=status_err,
                     traceback_info=traceback.format_exc(),
@@ -440,7 +450,7 @@ class ChatGPTProxy(ProxyBase):
                 resp_json = {"error": {"message": api_err.message, "type": api_err.type, "param": api_err.param, "code": api_err.code}}
 
                 # Error log
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=api_err,
                     traceback_info=traceback.format_exc(),
@@ -456,7 +466,7 @@ class ChatGPTProxy(ProxyBase):
                 resp_json = {"error": {"message": str(oai_err), "type": "openai_error", "param": None, "code": None}}
 
                 # Error log
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=oai_err,
                     traceback_info=traceback.format_exc(),
@@ -472,7 +482,7 @@ class ChatGPTProxy(ProxyBase):
                 resp_json = {"error": {"message": "Proxy error", "type": "proxy_error", "param": None, "code": None}}
 
                 # Error log
-                self.access_logger_queue.put(ChatGPTErrorItem(
+                self.access_logger_queue.put(self.error_item_class(
                     request_id=request_id,
                     exception=ex,
                     traceback_info=traceback.format_exc(),
