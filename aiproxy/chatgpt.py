@@ -207,6 +207,7 @@ class ChatGPTProxy(ProxyBase):
         api_key: str = None,
         async_client: AsyncClient = None,
         max_retries: int = 0,
+        timeout: float = 60.0,
         request_filters: List[RequestFilterBase] = None,
         response_filters: List[ResponseFilterBase] = None,
         request_item_class: type = ChatGPTRequestItem,
@@ -233,7 +234,8 @@ class ChatGPTProxy(ProxyBase):
         else:
             self.client = AsyncClient(
                 api_key=api_key or os.getenv("OPENAI_API_KEY") or self._empty_openai_api_key,
-                max_retries=max_retries
+                max_retries=max_retries,
+                timeout=timeout
             )
 
     async def filter_request(self, request_id: str, request_json: dict, request_headers: dict) -> Union[dict, JSONResponse, EventSourceResponse]:
