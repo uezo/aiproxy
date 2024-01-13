@@ -447,7 +447,7 @@ class ChatGPTProxy(ProxyBase):
                 return self.return_response_with_headers(JSONResponse(resp_json, status_code=status_err.status_code), request_id)
 
             except APIError as api_err:
-                logger.error(f"APIError from ChatGPT: {status_err}\n{traceback.format_exc()}")
+                logger.error(f"APIError from ChatGPT: {api_err}\n{traceback.format_exc()}")
 
                 resp_json = {"error": {"message": api_err.message, "type": api_err.type, "param": api_err.param, "code": api_err.code}}
 
