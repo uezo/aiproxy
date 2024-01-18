@@ -90,7 +90,12 @@ def count_request_token(request_json: dict):
     for m in request_json["messages"]:
         token_count += tokens_per_message
         for k, v in m.items():
-            token_count += count_token(v)
+            if isinstance(v, list):
+                for c in v:
+                    if c.get("type") == "text":
+                        token_count += count_token(c["text"])
+            else:
+                token_count += count_token(v)
             if k == "name":
                 token_count += tokens_per_name
 
