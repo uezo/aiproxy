@@ -2004,6 +2004,69 @@ def test_request_item_to_accesslog(messages, request_json, request_headers, func
     assert accesslog.model == request_json["model"]
 
 
+def test_request_item_to_accesslog_array_content_textonly(messages, request_json, request_headers, functions, tools):
+    request_id = str(uuid4())
+    request_json["functions"] = functions
+    request_json["tools"] = tools
+    text_content = request_json["messages"][0]["content"]
+    request_json["messages"][0]["content"] = [{"type": "text", "text": text_content}]
+    item = ChatGPTRequestItem(request_id, request_json, request_headers)
+
+    accesslog = item.to_accesslog(AccessLog)
+
+    assert accesslog.request_id == request_id
+    assert isinstance(accesslog.created_at, datetime)
+    assert accesslog.direction == "request"
+    assert accesslog.content == text_content
+    assert accesslog.function_call is None
+    assert accesslog.tool_calls is None
+    assert accesslog.raw_body == json.dumps(request_json, ensure_ascii=False)
+    assert accesslog.raw_headers == json.dumps(request_headers, ensure_ascii=False)
+    assert accesslog.model == request_json["model"]
+
+
+def test_request_item_to_accesslog_array_content_notext(messages, request_json, request_headers, functions, tools):
+    request_id = str(uuid4())
+    request_json["functions"] = functions
+    request_json["tools"] = tools
+    urls = [{"type": "image_url", "image_url": "url1"}, {"type": "image_url", "image_url": "url2"}]
+    request_json["messages"][0]["content"] = urls
+    item = ChatGPTRequestItem(request_id, request_json, request_headers)
+
+    accesslog = item.to_accesslog(AccessLog)
+
+    assert accesslog.request_id == request_id
+    assert isinstance(accesslog.created_at, datetime)
+    assert accesslog.direction == "request"
+    assert accesslog.content == json.dumps(urls)
+    assert accesslog.function_call is None
+    assert accesslog.tool_calls is None
+    assert accesslog.raw_body == json.dumps(request_json, ensure_ascii=False)
+    assert accesslog.raw_headers == json.dumps(request_headers, ensure_ascii=False)
+    assert accesslog.model == request_json["model"]
+
+
+def test_request_item_to_accesslog_array_content_includetext(messages, request_json, request_headers, functions, tools):
+    request_id = str(uuid4())
+    request_json["functions"] = functions
+    request_json["tools"] = tools
+    text_content = request_json["messages"][0]["content"]
+    request_json["messages"][0]["content"] = [{"type": "image_url", "image_url": "url1"}, {"type": "image_url", "image_url": "url2"}, {"type": "text", "text": text_content}]
+    item = ChatGPTRequestItem(request_id, request_json, request_headers)
+
+    accesslog = item.to_accesslog(AccessLog)
+
+    assert accesslog.request_id == request_id
+    assert isinstance(accesslog.created_at, datetime)
+    assert accesslog.direction == "request"
+    assert accesslog.content == text_content
+    assert accesslog.function_call is None
+    assert accesslog.tool_calls is None
+    assert accesslog.raw_body == json.dumps(request_json, ensure_ascii=False)
+    assert accesslog.raw_headers == json.dumps(request_headers, ensure_ascii=False)
+    assert accesslog.model == request_json["model"]
+
+
 def test_request_item_to_from_json(messages, request_json, request_headers, functions, tools):
     request_id = str(uuid4())
     request_json["functions"] = functions
@@ -2297,7 +2360,7 @@ def test_post_content(messages, request_headers, openai_client, db):
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 # NOTE: Restart AIProxy instance with custom log worker before this case
@@ -2335,7 +2398,7 @@ def test_post_content_custom_log(messages, request_headers, openai_client, db):
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
     assert db_request.user_id == extra_headers["x-user-id"]
@@ -2372,7 +2435,7 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 def test_post_content_tools(messages, request_headers, tools, openai_client, db):
@@ -2405,7 +2468,7 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 
@@ -2469,7 +2532,7 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 
@@ -2510,7 +2573,7 @@ def test_post_content_stream_function(messages, request_headers, functions, open
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 
@@ -2551,7 +2614,7 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
     assert "openai-model" in db_headers
-    assert "x-ratelimit-remaining-tokens_usage_based" in db_headers
+    assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
 

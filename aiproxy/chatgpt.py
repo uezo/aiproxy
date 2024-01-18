@@ -26,11 +26,20 @@ class ChatGPTRequestItem(RequestItemBase):
         if auth := request_headers_copy.get("authorization"):
             request_headers_copy["authorization"] = auth[:12] + "*****" + auth[-2:]
 
+        content = self.request_json["messages"][-1]["content"]
+        if isinstance(content, list):
+            for c in content:
+                if c["type"] == "text":
+                    content = c["text"]
+                    break
+            else:
+                content = json.dumps(content)
+
         accesslog = accesslog_cls(
             request_id=self.request_id,
             created_at=datetime.utcnow(),
             direction="request",
-            content=self.request_json["messages"][-1]["content"],
+            content=content,
             raw_body=json.dumps(self.request_json, ensure_ascii=False),
             raw_headers=json.dumps(request_headers_copy, ensure_ascii=False),
             model=self.request_json.get("model")
