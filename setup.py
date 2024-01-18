@@ -2,7 +2,7 @@ from setuptools import setup
 
 setup(
     name="aiproxy-python",
-    version="0.3.2",
+    version="0.3.4",
     url="https://github.com/uezo/aiproxy",
     author="uezo",
     author_email="uezo@uezo.net",
