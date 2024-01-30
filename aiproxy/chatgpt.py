@@ -242,15 +242,11 @@ class ChatGPTProxy(ProxyBase):
         self.stream_response_item_class = stream_response_item_class
         self.error_item_class = error_item_class
 
-        # ChatGPT client
-        if async_client:
-            self.client = async_client
-        else:
-            self.client = AsyncClient(
-                api_key=api_key or os.getenv("OPENAI_API_KEY") or self._empty_openai_api_key,
-                max_retries=max_retries,
-                timeout=timeout
-            )
+        # ChatGPT client config
+        self.api_key = api_key or os.getenv("OPENAI_API_KEY") or self._empty_openai_api_key
+        self.max_retries = max_retries
+        self.timeout = timeout
+        self.async_client = async_client
 
     async def filter_request(self, request_id: str, request_json: dict, request_headers: dict) -> Union[dict, JSONResponse, EventSourceResponse]:
         for f in self.request_filters:
@@ -298,6 +294,13 @@ class ChatGPTProxy(ProxyBase):
 
         return request_json
 
+    def get_client(self):
+        return self.async_client or AsyncClient(
+            api_key=self.api_key,
+            max_retries=self.max_retries,
+            timeout=self.timeout
+        )
+
     async def filter_response(self, request_id: str, response: ChatCompletion) -> ChatCompletion:
         response_json = response.model_dump()
 
@@ -315,6 +318,7 @@ class ChatGPTProxy(ProxyBase):
         @app.post(base_url)
         async def handle_request(request: Request):
             request_id = str(uuid4())
+            async_client = None
 
             try:
                 start_time = time.time()
@@ -334,17 +338,18 @@ class ChatGPTProxy(ProxyBase):
                     return request_json
 
                 # Call API
+                async_client = self.get_client()
                 start_time_api = time.time()
-                if self.client.api_key != self._empty_openai_api_key:
+                if self.api_key != self._empty_openai_api_key:
                     # Always use server api key if set to client
-                    raw_response = await self.client.chat.completions.with_raw_response.create(**request_json)
+                    raw_response = await async_client.chat.completions.with_raw_response.create(**request_json)
                 elif user_auth_header := request_headers.get("authorization"):  # Lower case from client.
-                    raw_response = await self.client.chat.completions.with_raw_response.create(
+                    raw_response = await async_client.chat.completions.with_raw_response.create(
                         **request_json, extra_headers={"Authorization": user_auth_header}   # Pascal to server
                     )
                 else:
                     # Call API anyway ;)
-                    raw_response = await self.client.chat.completions.with_raw_response.create(**request_json)
+                    raw_response = await async_client.chat.completions.with_raw_response.create(**request_json)
 
                 completion_response = raw_response.parse()
                 completion_response_headers = raw_response.headers
@@ -364,8 +369,11 @@ class ChatGPTProxy(ProxyBase):
                                 ))
                                 if chunk:
                                     yield chunk.model_dump_json()
-                        
+
                         finally:
+                            # Close client after reading stream
+                            await async_client.close()
+
                             # Response log
                             now = time.time()
                             self.access_logger_queue.put(self.stream_response_item_class(
@@ -383,6 +391,9 @@ class ChatGPTProxy(ProxyBase):
                     ), request_id)
 
                 else:
+                    # Close client imediately
+                    await async_client.close()
+
                     duration_api = time.time() - start_time_api
 
                     # Filter response
@@ -397,11 +408,6 @@ class ChatGPTProxy(ProxyBase):
                         duration_api=duration_api,
                         status_code=completion_status_code
                     ))
-
-                    return self.return_response_with_headers(JSONResponse(
-                        content=completion_response.model_dump(),
-                        headers=completion_response_headers
-                    ), request_id)
 
                     return self.return_response_with_headers(JSONResponse(
                         content=completion_response.model_dump(),
