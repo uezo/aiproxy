@@ -330,7 +330,7 @@ proxy = ChatGPTProxy(
 
 You can use other RDBMS that is supported by SQLAlchemy. You can use them by just changing connection string. (and, install client libraries required.)
 
-Example for PostgreSQL🐘
+#### Example for PostgreSQL🐘
 
 ```sh
 $ pip install psycopg2-binary
@@ -343,6 +343,22 @@ connection_str = f"postgresql://{USER}:{PASSWORD}@{HOST}:{PORT}/{DATABASE}"
 worker = AccessLogWorker(connection_str=connection_str)
 ```
 
+#### Example for SQL Server or Azure SQL Database
+
+This is a temporary workaroud from AIProxy >= 0.3.6. Set `AIPROXY_USE_NVARCHAR=1` to use NVARCHAR internally.
+
+```sh
+$ export AIPROXY_USE_NVARCHAR=1
+```
+
+Install ODBC driver (version 18 in this example) and `pyodbc` then set connection string as follows:
+
+```python
+# connection_str = "sqlite:///aiproxy.db"
+connection_str = f"mssql+pyodbc:///?odbc_connect=DRIVER={ODBC Driver 18 for SQL Server};SERVER=YOUR_SERVER;PORT=1433;DATABASE=YOUR_DB;UID=YOUR_UID;PWD=YOUR_PWD"
+
+worker = AccessLogWorker(connection_str=connection_str)
+```
 
 ### Restrictions
 
