@@ -2,17 +2,22 @@ from abc import abstractmethod
 from datetime import datetime
 import json
 import logging
+import os
 from time import sleep
 import traceback
-from sqlalchemy import Column, Integer, String, Float, DateTime, create_engine
+from sqlalchemy import Column, Integer, String, NVARCHAR, Float, DateTime, create_engine
 from sqlalchemy.orm import sessionmaker, declarative_base, declared_attr, Session
 from .queueclient import DefaultQueueClient, QueueItemBase, QueueClientBase
 
 
 logger = logging.getLogger(__name__)
 
+_use_nvarchar = True if os.environ.get("AIPROXY_USE_NVARCHAR") == "1" else False
+
 
 class _AccessLogBase:
+    use_nvarchar = _use_nvarchar
+
     @declared_attr
     def __tablename__(cls):
         return cls.__name__.lower()
@@ -39,23 +44,23 @@ class _AccessLogBase:
 
     @declared_attr
     def content(cls):
-        return Column(String)
+        return Column(NVARCHAR) if cls.use_nvarchar else Column(String)
 
     @declared_attr
     def function_call(cls):
-        return Column(String)
+        return Column(NVARCHAR) if cls.use_nvarchar else Column(String)
 
     @declared_attr
     def tool_calls(cls):
-        return Column(String)
+        return Column(NVARCHAR) if cls.use_nvarchar else Column(String)
 
     @declared_attr
     def raw_body(cls):
-        return Column(String)
+        return Column(NVARCHAR) if cls.use_nvarchar else Column(String)
 
     @declared_attr
     def raw_headers(cls):
-        return Column(String)
+        return Column(NVARCHAR) if cls.use_nvarchar else Column(String)
 
     @declared_attr
     def model(cls):
