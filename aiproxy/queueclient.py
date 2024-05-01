@@ -5,23 +5,7 @@ from typing import Iterator
 
 
 class QueueItemBase(ABC):
-    def to_dict(self) -> dict:
-        d = self.__dict__
-        d["type"] = self.__class__.__name__
-        return d
-
-    def to_json(self) -> str:
-        return json.dumps(self.to_dict())
-
-    @classmethod
-    def from_dict(cls, d: dict):
-        _d = d.copy()
-        del _d["type"]
-        return cls(**_d)
-
-    @classmethod
-    def from_json(cls, json_str: str):
-        return cls.from_dict(json.loads(json_str))
+    ...
 
 
 class QueueClientBase(ABC):

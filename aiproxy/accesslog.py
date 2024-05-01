@@ -110,17 +110,16 @@ class ResponseItemBase(QueueItemBase):
 
 
 class StreamChunkItemBase(QueueItemBase):
-    def __init__(self, request_id: str, chunk_json: dict = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, request_json: dict = None, status_code: int = 0) -> None:
+    def __init__(self, request_id: str, response_content: str = None, response_headers: dict = None, duration: float = 0, duration_api: float = 0, status_code: int = 0) -> None:
         self.request_id = request_id
-        self.chunk_json = chunk_json
+        self.response_content = response_content
         self.response_headers = response_headers
         self.duration = duration
         self.duration_api = duration_api
-        self.request_json = request_json
         self.status_code = status_code
 
     @abstractmethod
-    def to_accesslog(self, chunks: list, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
         ...
 
 
@@ -184,7 +183,6 @@ class AccessLogWorker:
         self.accesslog_cls.metadata.create_all(bind=self.db_engine)
         self.get_session = sessionmaker(autocommit=False, autoflush=False, bind=self.db_engine)
         self.queue_client = queue_client or DefaultQueueClient()
-        self.chunk_buffer = {}
 
     def insert_request(self, accesslog: _AccessLogBase, db: Session):
         db.add(accesslog)
@@ -194,42 +192,11 @@ class AccessLogWorker:
         db.add(accesslog)
         db.commit()
 
-    def use_db(self, item: QueueItemBase):
-        return not (isinstance(item, StreamChunkItemBase) and item.duration == 0)
-
     def process_item(self, item: QueueItemBase, db: Session):
         try:
-            # Request
-            if isinstance(item, RequestItemBase):
-                self.insert_request(item.to_accesslog(self.accesslog_cls), db)
-
-            # Non-stream response
-            elif isinstance(item, ResponseItemBase):
-                self.insert_response(item.to_accesslog(self.accesslog_cls), db)
-
-            # Stream response
-            elif isinstance(item, StreamChunkItemBase):
-                if not self.chunk_buffer.get(item.request_id):
-                    self.chunk_buffer[item.request_id] = []
-
-                if item.duration == 0:
-                    self.chunk_buffer[item.request_id].append(item)
-
-                else:
-                    # Last chunk data for specific request_id
-                    self.insert_response(item.to_accesslog(
-                        self.chunk_buffer[item.request_id], self.accesslog_cls
-                    ), db)
-                    # Remove chunks from buffer
-                    del self.chunk_buffer[item.request_id]
-
-            # Error response
-            elif isinstance(item, ErrorItemBase):
-                self.insert_response(item.to_accesslog(self.accesslog_cls), db)
-
+            self.insert_response(item.to_accesslog(self.accesslog_cls), db)
         except Exception as ex:
             logger.error(f"Error at processing queue item: {ex}\n{traceback.format_exc()}")
-
 
     def run(self):
         while True:
@@ -246,8 +213,8 @@ class AccessLogWorker:
                     if isinstance(item, WorkerShutdownItem) or item is None:
                         return
 
-                    if db is None and self.use_db(item):
-                        # Get db session just once in the loop when the item that uses db found
+                    if db is None:
+                        # Get db session just once in the loop
                         db = self.get_session()
 
                     self.process_item(item, db)

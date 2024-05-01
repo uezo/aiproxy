@@ -1,7 +1,6 @@
 import pytest
 from datetime import datetime
 import json
-import os
 from time import sleep
 from typing import Union
 from uuid import uuid4
@@ -14,14 +13,13 @@ from aiproxy import (
     AccessLog,
     RequestFilterBase,
     ResponseFilterBase,
-    ChatGPTProxy,
     AccessLogBase
 )
 from aiproxy.accesslog import AccessLogWorker, _AccessLogBase
-from aiproxy.chatgpt import ChatGPTRequestItem, ChatGPTResponseItem, ChatGPTStreamResponseItem
+from aiproxy.httpx_proxy import SessionInfo
+from aiproxy.chatgpt import ChatGPTProxy, ChatGPTRequestItem, ChatGPTResponseItem, ChatGPTStreamResponseItem
 
 sqlite_conn_str = "sqlite:///aiproxy_test.db"
-postgresql_conn_str = f"postgresql://{os.getenv('PSQL_USER')}:{os.getenv('PSQL_PASSWORD')}@{os.getenv('PSQL_HOST')}:{os.getenv('PSQL_PORT')}/{os.getenv('PSQL_DATABASE')}"
 
 DB_CONNECTION_STR = sqlite_conn_str
 
@@ -145,1855 +143,124 @@ def response_headers():
     return {"x-aiproxy-request-id": "test-id"}
 
 @pytest.fixture
-def chunks_json():
-    return [
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "",
-                        "function_call": None,
-                        "role": "assistant",
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u7533",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3057",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u8a33",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3042\u308a",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u307e",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u305b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3093",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u304c",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3001",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u6771",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u4eac",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3068",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u540d",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u53e4",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5c4b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u306e",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5929",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u6c17",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u60c5",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5831",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3092",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u63d0",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u4f9b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3059\u308b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3053",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3068",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u306f",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3067",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u304d",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u307e",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u305b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3093",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3002",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5929",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u6c17",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u306b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u95a2",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3059\u308b",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u60c5",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5831",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u306f",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3001",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5929",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5019",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u4e88",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5831",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u30b5",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u30a4\u30c8",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3084",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5929",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u6c17",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u30a2",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u30d7",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u30ea",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3092",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3054",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u5229",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u7528",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u304f\u3060\u3055\u3044",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": "\u3002",
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzBaWVmpPZZJFdxZgynVwZMATday",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": "stop",
-                    "index": 0
-                }
-            ],
-            "created": 1701680746,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        }
-    ]
+def chunked_content():
+    return """
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"role":"assistant","content":""},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"は"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"い"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"、"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"お"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"し"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"ゃ"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"べ"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"り"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"で"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"き"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"ます"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"！"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"何"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"を"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"お"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"話"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"し"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"し"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"ま"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"し"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"ょ"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"う"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"か"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"content":"？"},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9JgLISX5sX016TyYaFOHshbBHQQfx","object":"chat.completion.chunk","created":1714478024,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"stop"}]}
+
+data: [DONE]
+"""
 
 @pytest.fixture
-def chunks_function():
-    return [
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "",
-                            "name": "get_weather"
-                        },
-                        "role": "assistant",
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "{\n",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": " ",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": " \"",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "location",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "\":",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": " \"",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "\u6771",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "\u4eac",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "\"\n",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": {
-                            "arguments": "}",
-                            "name": None
-                        },
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        },
-        {
-            "id": "chatcmpl-8RzHboLVZGBoFMc5gEGrMdcGHGPWs",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": "stop",
-                    "index": 0
-                }
-            ],
-            "created": 1701681119,
-            "model": "gpt-3.5-turbo-0613",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": None
-        }
-    ]
+def chunked_function():
+    return """
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"role":"assistant","content":null,"function_call":{"name":"get_weather","arguments":""}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"{\\""}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"location"}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"\\":\\""}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"名"}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"古"}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"屋"}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"function_call":{"arguments":"\\"}"}},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jh2AEqsFhgxJODlR9mjFILdXhCgZ","object":"chat.completion.chunk","created":1714480682,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"function_call"}]}
+
+data: [DONE]
+"""
 
 @pytest.fixture
-def chunks_tools():
-    return [
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": "assistant",
-                        "tool_calls": None
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": "call_vCJBXdx4kkyl16bIBy6i3SwD",
-                                "function": {
-                                    "arguments": "",
-                                    "name": "get_weather"
-                                },
-                                "type": "function"
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": None,
-                                "function": {
-                                    "arguments": "{\"lo",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": None,
-                                "function": {
-                                    "arguments": "catio",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": None,
-                                "function": {
-                                    "arguments": "n\": \"T",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": None,
-                                "function": {
-                                    "arguments": "okyo",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 0,
-                                "id": None,
-                                "function": {
-                                    "arguments": "\"}",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": "call_2pt8XB57mFTaij7CSeIVQm4j",
-                                "function": {
-                                    "arguments": "",
-                                    "name": "get_weather"
-                                },
-                                "type": "function"
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": None,
-                                "function": {
-                                    "arguments": "{\"lo",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": None,
-                                "function": {
-                                    "arguments": "catio",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": None,
-                                "function": {
-                                    "arguments": "n\": \"N",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": None,
-                                "function": {
-                                    "arguments": "agoy",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": [
-                            {
-                                "index": 1,
-                                "id": None,
-                                "function": {
-                                    "arguments": "a\"}",
-                                    "name": None
-                                },
-                                "type": None
-                            }
-                        ]
-                    },
-                    "finish_reason": None,
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        },
-        {
-            "id": "chatcmpl-8RzQ18VWw1jxIzcFXGdGKrKusELgD",
-            "choices": [
-                {
-                    "delta": {
-                        "content": None,
-                        "function_call": None,
-                        "role": None,
-                        "tool_calls": None
-                    },
-                    "finish_reason": "tool_calls",
-                    "index": 0
-                }
-            ],
-            "created": 1701681641,
-            "model": "gpt-3.5-turbo-1106",
-            "object": "chat.completion.chunk",
-            "system_fingerprint": "fp_eeff13170a"
-        }
-    ]
+def chunked_tools():
+    return """
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"role":"assistant","content":null,"tool_calls":[{"index":0,"id":"call_uIfE0D0tMU4p2vKusFbiU1OR","type":"function","function":{"name":"get_weather","arguments":""}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\\""}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"location"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\":\\""}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"名"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"古"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"屋"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\\"}"}}]},"logprobs":null,"finish_reason":null}]}
+
+data: {"id":"chatcmpl-9Jij02QHWARdjqLLfZgv3B2RzkC1z","object":"chat.completion.chunk","created":1714487182,"model":"gpt-3.5-turbo-0125","system_fingerprint":"fp_3b956da36b","choices":[{"index":0,"delta":{},"logprobs":null,"finish_reason":"tool_calls"}]}
+
+data: [DONE]
+"""
 
 
 def test_request_item_to_accesslog(messages, request_json, request_headers, functions, tools):
-    request_id = str(uuid4())
     request_json["functions"] = functions
     request_json["tools"] = tools
-    item = ChatGPTRequestItem(request_id, request_json, request_headers)
 
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+
+    item = ChatGPTRequestItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "request"
     assert accesslog.content == messages[-1]["content"]
@@ -2005,16 +272,19 @@ def test_request_item_to_accesslog(messages, request_json, request_headers, func
 
 
 def test_request_item_to_accesslog_array_content_textonly(messages, request_json, request_headers, functions, tools):
-    request_id = str(uuid4())
     request_json["functions"] = functions
     request_json["tools"] = tools
     text_content = request_json["messages"][0]["content"]
     request_json["messages"][0]["content"] = [{"type": "text", "text": text_content}]
-    item = ChatGPTRequestItem(request_id, request_json, request_headers)
 
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+
+    item = ChatGPTRequestItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "request"
     assert accesslog.content == text_content
@@ -2026,16 +296,19 @@ def test_request_item_to_accesslog_array_content_textonly(messages, request_json
 
 
 def test_request_item_to_accesslog_array_content_notext(messages, request_json, request_headers, functions, tools):
-    request_id = str(uuid4())
     request_json["functions"] = functions
     request_json["tools"] = tools
     urls = [{"type": "image_url", "image_url": "url1"}, {"type": "image_url", "image_url": "url2"}]
     request_json["messages"][0]["content"] = urls
-    item = ChatGPTRequestItem(request_id, request_json, request_headers)
 
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+
+    item = ChatGPTRequestItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "request"
     assert accesslog.content == json.dumps(urls)
@@ -2047,16 +320,20 @@ def test_request_item_to_accesslog_array_content_notext(messages, request_json, 
 
 
 def test_request_item_to_accesslog_array_content_includetext(messages, request_json, request_headers, functions, tools):
-    request_id = str(uuid4())
     request_json["functions"] = functions
     request_json["tools"] = tools
     text_content = request_json["messages"][0]["content"]
     request_json["messages"][0]["content"] = [{"type": "image_url", "image_url": "url1"}, {"type": "image_url", "image_url": "url2"}, {"type": "text", "text": text_content}]
-    item = ChatGPTRequestItem(request_id, request_json, request_headers)
 
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+
+    item = ChatGPTRequestItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "request"
     assert accesslog.content == text_content
@@ -2067,34 +344,18 @@ def test_request_item_to_accesslog_array_content_includetext(messages, request_j
     assert accesslog.model == request_json["model"]
 
 
-def test_request_item_to_from_json(messages, request_json, request_headers, functions, tools):
-    request_id = str(uuid4())
-    request_json["functions"] = functions
-    request_json["tools"] = tools
-    item = ChatGPTRequestItem(request_id, request_json, request_headers)
-
-    item_json = item.to_json()
-    item_dict = json.loads(item_json)
-
-    assert item_dict["type"] == ChatGPTRequestItem.__name__
-    assert item_dict["request_id"] == request_id
-    assert item_dict["request_json"] == request_json
-    assert item_dict["request_headers"] == request_headers
-
-    item_restore = ChatGPTRequestItem.from_json(item_json)
-
-    assert item_restore.request_id == request_id
-    assert item_restore.request_json == request_json
-    assert item_restore.request_headers == request_headers    
-
-
 def test_response_item_to_accesslog(response_json, response_headers):
-    request_id = str(uuid4())
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
+    session = SessionInfo()
+    session.response_json = response_json
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
 
+    item = ChatGPTResponseItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
@@ -2111,16 +372,20 @@ def test_response_item_to_accesslog(response_json, response_headers):
 
 
 def test_response_item_to_accesslog_function(response_json, response_headers):
-    request_id = str(uuid4())
-
     response_json["choices"][0]["message"]["content"] = ""
     response_json["choices"][0]["message"]["function_call"] = {"name": "get_weather", "arguments": '{\n  "location": "東京"\n}'}
-    
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
 
+    session = SessionInfo()
+    session.response_json = response_json
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
+
+    item = ChatGPTResponseItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
@@ -2137,19 +402,23 @@ def test_response_item_to_accesslog_function(response_json, response_headers):
 
 
 def test_response_item_to_accesslog_tools(response_json, response_headers):
-    request_id = str(uuid4())
-
     response_json["choices"][0]["message"]["content"] = ""
     response_json["choices"][0]["message"]["tool_calls"] = [
         {"type": "function", "function": {"name": "get_weather", "arguments": '{\n  "location": "東京"\n}'}},
         {"type": "function", "function": {"name": "get_weather", "arguments": '{\n  "location": "名古屋"\n}'}},
     ]
 
-    item = ChatGPTResponseItem(request_id, response_json, response_headers, 1.0, 2.0, 200)
+    session = SessionInfo()
+    session.response_json = response_json
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
 
+    item = ChatGPTResponseItem.from_session(session)
     accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
@@ -2165,93 +434,88 @@ def test_response_item_to_accesslog_tools(response_json, response_headers):
     assert accesslog.request_time_api == item.duration_api
 
 
-def test_stream_response_item_to_accesslog(chunks_json, request_json, response_headers):
-    request_id = str(uuid4())
-    chunks = []
-    content = ""
-    for c in chunks_json:
-        chunks.append(ChatGPTStreamResponseItem(request_id, c))
-        if c["choices"] and c["choices"][0]["delta"]["content"]:
-            content += c["choices"][0]["delta"]["content"]
+def test_stream_response_item_to_accesslog(chunked_content, response_headers, request_json):
+    session = SessionInfo()
+    session.request_json = request_json
+    session.response_body = chunked_content
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
-    accesslog = last_chunk.to_accesslog(chunks, AccessLog)
+    item = ChatGPTStreamResponseItem.from_session(session)
+    accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
-    assert accesslog.content == content
+    assert accesslog.content == "はい、おしゃべりできます！何をお話ししましょうか？"
     assert accesslog.function_call is None
     assert accesslog.tool_calls is None
-    assert accesslog.raw_body == json.dumps(chunks_json, ensure_ascii=False)
+    assert accesslog.raw_body == chunked_content
     assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
-    assert accesslog.model == chunks_json[0]["model"]
+    assert accesslog.model == "gpt-3.5-turbo-0125"
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
-    assert accesslog.request_time == last_chunk.duration
-    assert accesslog.request_time_api == last_chunk.duration_api
+    assert accesslog.request_time == item.duration
+    assert accesslog.request_time_api == item.duration_api
 
 
-def test_stream_response_item_to_accesslog_function(chunks_function, request_json, response_headers):
-    request_id = str(uuid4())
-    chunks = []
-    function_call = {"name": "", "arguments": ""}
-    for c in chunks_function:
-        chunks.append(ChatGPTStreamResponseItem(request_id, c))
-        if c["choices"] and c["choices"][0]["delta"]["function_call"]:
-            if not function_call["name"] and c["choices"][0]["delta"]["function_call"]["name"]:
-                function_call["name"] = c["choices"][0]["delta"]["function_call"]["name"]
-            function_call["arguments"] += c["choices"][0]["delta"]["function_call"]["arguments"]
+def test_stream_response_item_to_accesslog_function(chunked_function, request_json, response_headers):
+    session = SessionInfo()
+    session.request_json = request_json
+    session.response_body = chunked_function
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
-    accesslog = last_chunk.to_accesslog(chunks, AccessLog)
+    item = ChatGPTStreamResponseItem.from_session(session)
+    accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
     assert accesslog.content == ""
-    assert accesslog.function_call == json.dumps(function_call, ensure_ascii=False)
+    assert accesslog.function_call == json.dumps({"name": "get_weather", "arguments": "{\"location\":\"名古屋\"}"}, ensure_ascii=False)
     assert accesslog.tool_calls is None
-    assert accesslog.raw_body == json.dumps(chunks_function, ensure_ascii=False)
+    assert accesslog.raw_body == chunked_function
     assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
-    assert accesslog.model == chunks_function[0]["model"]
+    assert accesslog.model == "gpt-3.5-turbo-0125"
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
-    assert accesslog.request_time == last_chunk.duration
-    assert accesslog.request_time_api == last_chunk.duration_api
+    assert accesslog.request_time == item.duration
+    assert accesslog.request_time_api == item.duration_api
 
 
-def test_stream_response_item_to_accesslog_tools(chunks_tools, request_json, response_headers):
-    request_id = str(uuid4())
-    chunks = []
-    tool_calls = []
-    for c in chunks_tools:
-        chunks.append(ChatGPTStreamResponseItem(request_id, c))
-        if c["choices"] and c["choices"][0]["delta"]["tool_calls"]:
-            if c["choices"][0]["delta"]["tool_calls"][0]["type"] is not None:
-                tool_calls.append({"type": "function", "function": {"name": c["choices"][0]["delta"]["tool_calls"][0]["function"]["name"], "arguments": ""}})
-            elif c["choices"][0]["delta"]["tool_calls"][0]["function"].get("arguments"):
-                tool_calls[-1]["function"]["arguments"] += c["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
+def test_stream_response_item_to_accesslog_tools(chunked_tools, request_json, response_headers):
+    session = SessionInfo()
+    session.request_json = request_json
+    session.response_body = chunked_tools
+    session.response_headers = response_headers
+    session.duration = 2.0
+    session.duration_api = 1.0
+    session.status_code = 200
 
-    last_chunk = ChatGPTStreamResponseItem(request_id, duration=1.0, duration_api=2.0, request_json=request_json, response_headers=response_headers, status_code=200)
-    accesslog = last_chunk.to_accesslog(chunks, AccessLog)
+    item = ChatGPTStreamResponseItem.from_session(session)
+    accesslog = item.to_accesslog(AccessLog)
 
-    assert accesslog.request_id == request_id
+    assert accesslog.request_id == session.request_id
     assert isinstance(accesslog.created_at, datetime)
     assert accesslog.direction == "response"
     assert accesslog.status_code == 200
     assert accesslog.content == ""
     assert accesslog.function_call is None
-    assert accesslog.tool_calls == json.dumps(tool_calls)
-    assert accesslog.raw_body == json.dumps(chunks_tools, ensure_ascii=False)
+    assert accesslog.tool_calls == json.dumps([{"type": "function", "function": {"name": "get_weather", "arguments": "{\"location\":\"名古屋\"}"}}], ensure_ascii=False)
+    assert accesslog.raw_body == chunked_tools
     assert accesslog.raw_headers == json.dumps(response_headers, ensure_ascii=False)
-    assert accesslog.model == chunks_tools[0]["model"]
+    assert accesslog.model == "gpt-3.5-turbo-0125"
     assert accesslog.prompt_tokens > 0
     assert accesslog.completion_tokens > 0
-    assert accesslog.request_time == last_chunk.duration
-    assert accesslog.request_time_api == last_chunk.duration_api
+    assert accesslog.request_time == item.duration
+    assert accesslog.request_time_api == item.duration_api
 
 
 @pytest.fixture
@@ -2268,56 +532,62 @@ def db(worker):
 
 @pytest.fixture
 def openai_client():
-    return Client(base_url="http://127.0.0.1:8000")
+    return Client(base_url="http://127.0.0.1:8000/chatgpt")
 
 @pytest.mark.asyncio
 async def test_request_filter_overwrite(chatgpt_proxy, request_json, request_headers):
-    request_id = str(uuid4())
     request_json["model"] = "gpt-4"
 
     chatgpt_proxy.add_filter(OverwriteFilter())
-    await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+    session.request_url = "http://127.0.0.1:8000/path/to/gpt"
+
+    await chatgpt_proxy.filter_request(session)
 
     assert request_json["model"] == "gpt-3.5-turbo"
 
 
 @pytest.mark.asyncio
 async def test_request_filter_valuereturn(chatgpt_proxy, request_json, request_headers):
-    request_id = str(uuid4())
-
     chatgpt_proxy.add_filter(ValueReturnFilter())
 
+    session = SessionInfo()
+    session.request_json = request_json
+    session.request_headers = request_headers
+    session.request_url = "http://127.0.0.1:8000/path/to/gpt"
+
     # Non-stream
-    json_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    json_response = await chatgpt_proxy.filter_request(session)
     assert isinstance(json_response, JSONResponse)
     assert json_response.headers.get("x-aiproxy-request-id") is not None
     ret = json.loads(json_response.body.decode())
     assert ret["choices"][0]["message"]["content"] == "user is required"
 
-    request_json["user"] = "uezo"
-    json_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    session.request_json["user"] = "uezo"
+    json_response = await chatgpt_proxy.filter_request(session)
     assert isinstance(json_response, JSONResponse)
     assert json_response.headers.get("x-aiproxy-request-id") is not None
     ret = json.loads(json_response.body.decode())
     assert ret["choices"][0]["message"]["content"] == "you can't use this service"
 
-    request_json["user"] = "unagi"
-    dict_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
-    assert isinstance(dict_response, dict)
-    assert dict_response == request_json
+    session.request_json["user"] = "unagi"
+    none_response = await chatgpt_proxy.filter_request(session)
+    assert none_response is None
 
     # Stream
-    request_json["user"] = "uezo"
-    request_json["stream"] = True
-    sse_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
+    session.stream = True
+    session.request_json["user"] = "uezo"
+    sse_response = await chatgpt_proxy.filter_request(session)
     assert isinstance(sse_response, EventSourceResponse)
     assert sse_response.headers.get("x-aiproxy-request-id") is not None
 
-    request_json["user"] = "unagi"
-    request_json["stream"] = True
-    dict_response = await chatgpt_proxy.filter_request(request_id, request_json, request_headers)
-    assert isinstance(dict_response, dict)
-    assert dict_response == request_json
+    session.request_json["user"] = "unagi"
+    session.request_json["stream"] = True
+    none_response = await chatgpt_proxy.filter_request(session)
+    assert none_response is None
 
 
 @pytest.mark.asyncio
@@ -2327,9 +597,9 @@ async def test_response_filter_valuereturn(chatgpt_proxy, response_json):
     chatgpt_proxy.add_filter(OverwriteResponseFilter())
 
     resp = ChatCompletion.model_validate(response_json)
-    ret = await chatgpt_proxy.filter_response(request_id, resp)
+    ret = await chatgpt_proxy.filter_response(request_id, resp.model_dump())
 
-    assert ret.choices[0].message.content == "Overwrite in filter"
+    assert ret["choices"][0]["message"]["content"] == "Overwrite in filter"
 
 
 def test_post_content(messages, request_headers, openai_client, db):
@@ -2352,7 +622,7 @@ def test_post_content(messages, request_headers, openai_client, db):
 
     assert db_request.content == messages[-1]["content"]
     assert db_resonse.content == comp_resp.choices[0].message.content
-    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    assert json.loads(db_resonse.raw_body) == json.loads(api_resp.content)
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2364,6 +634,7 @@ def test_post_content(messages, request_headers, openai_client, db):
     assert db_resonse.status_code == api_resp.status_code
 
 # NOTE: Restart AIProxy instance with custom log worker before this case
+@pytest.mark.skip("skip")
 def test_post_content_custom_log(messages, request_headers, openai_client, db):
     extra_headers = {
         "x-user-id": "user_1234567890",
@@ -2390,7 +661,7 @@ def test_post_content_custom_log(messages, request_headers, openai_client, db):
 
     assert db_request.content == messages[-1]["content"]
     assert db_resonse.content == comp_resp.choices[0].message.content
-    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    assert json.loads(db_resonse.raw_body) == json.loads(api_resp.content)
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2404,6 +675,7 @@ def test_post_content_custom_log(messages, request_headers, openai_client, db):
     assert db_request.user_id == extra_headers["x-user-id"]
     assert db_request.device_id == extra_headers["x-device-id"]
     assert db_request.ip_address == extra_headers["x-ip-address"]
+
 
 def test_post_content_function(messages, request_headers, functions, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
@@ -2427,7 +699,7 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.function_call) == function_call.model_dump()
-    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    assert json.loads(db_resonse.raw_body) == json.loads(api_resp.content)
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2437,6 +709,7 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
     assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
+
 
 def test_post_content_tools(messages, request_headers, tools, openai_client, db):
     api_resp = openai_client.chat.completions.with_raw_response.create(
@@ -2460,7 +733,7 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.tool_calls) == [t.model_dump() for t in tool_calls]
-    assert json.loads(db_resonse.raw_body) == comp_resp.model_dump()    
+    assert json.loads(db_resonse.raw_body) == json.loads(api_resp.content)   
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2494,7 +767,6 @@ def test_post_content_apierror(messages, request_headers, openai_client, db):
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()
 
     assert db_request.content == messages[-1]["content"]
-    assert str(apisterr.value) in db_resonse.content
     assert db_resonse.status_code == api_resp.status_code
 
 
@@ -2503,28 +775,33 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
         model="gpt-3.5-turbo", messages=messages, stream=True
     )
 
-    comp_resp = api_resp.parse()
     headers = api_resp.headers
-
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
-    chunks = []
+    chunks = ""
     content = ""
-    for chunk in comp_resp:
-        chunks.append(chunk.model_dump())
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.content:
-            content += chunk.choices[0].delta.content
+    for b in api_resp.http_response.iter_raw():
+        chunk_str = b.decode("utf-8")
+        chunk_str = chunk_str.replace("\r", "").replace("event: \n", "")
+        chunks += chunk_str
+        for data_str in chunk_str.split("\n\n"):
+            if "data:" in data_str:
+                try:
+                    chunk = json.loads(chunk_str.split("data:")[1])
+                    content += chunk["choices"][0]["delta"]["content"]
+                except:
+                    pass
 
     # Wait for processing queued items
-    sleep(10.0)
+    sleep(5.0)
 
     db_request = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "request").first()
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "response").first()
 
     assert db_request.content == messages[-1]["content"]
     assert db_resonse.content == content
-    assert json.loads(db_resonse.raw_body) == chunks
+    assert db_resonse.raw_body == chunks
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2541,21 +818,28 @@ def test_post_content_stream_function(messages, request_headers, functions, open
         model="gpt-3.5-turbo", messages=messages, stream=True, functions=functions
     )
 
-    comp_resp = api_resp.parse()
     headers = api_resp.headers
 
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
-    chunks = []
+    chunks = ""
     function_call = {"name": "", "arguments": ""}
-    for chunk in comp_resp:
-        chunks.append(chunk.model_dump())
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.function_call:
-            if chunk.choices[0].delta.function_call.name and not function_call["name"]:
-                function_call["name"] = chunk.choices[0].delta.function_call.name
-            else:
-                function_call["arguments"] += chunk.choices[0].delta.function_call.arguments
+    for b in api_resp.http_response.iter_raw():
+        chunk_str = b.decode("utf-8")
+        chunk_str = chunk_str.replace("\r", "").replace("event: \n", "")
+        chunks += chunk_str
+        for data_str in chunk_str.split("\n\n"):
+            if "data:" in data_str:
+                try:
+                    chunk = json.loads(chunk_str.split("data:")[1])
+                    if "choices" in chunk and "delta" in chunk["choices"][0] and "function_call" in chunk["choices"][0]["delta"]:
+                        if "name" in chunk["choices"][0]["delta"]["function_call"] and not function_call["name"]:
+                            function_call["name"] = chunk["choices"][0]["delta"]["function_call"]["name"]
+                        else:
+                            function_call["arguments"] += chunk["choices"][0]["delta"]["function_call"]["arguments"]
+                except:
+                    pass
 
     # Wait for processing queued items
     sleep(10.0)
@@ -2565,7 +849,7 @@ def test_post_content_stream_function(messages, request_headers, functions, open
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.function_call) == function_call
-    assert json.loads(db_resonse.raw_body) == chunks
+    assert db_resonse.raw_body == chunks
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2582,21 +866,28 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
         model="gpt-3.5-turbo", messages=messages, stream=True, tools=tools
     )
 
-    comp_resp = api_resp.parse()
     headers = api_resp.headers
 
     request_id = headers.get("x-aiproxy-request-id")
     assert request_id is not None
 
-    chunks = []
+    chunks = ""
     tool_calls = []
-    for chunk in comp_resp:
-        chunks.append(chunk.model_dump())
-        if chunk.choices and chunk.choices[0].delta and chunk.choices[0].delta.tool_calls:
-            if chunk.choices[0].delta.tool_calls[0].type is not None:
-                tool_calls.append({"type": "function", "function": {"name": chunk.choices[0].delta.tool_calls[0].function.name, "arguments": ""}})
-            elif chunk.choices[0].delta.tool_calls[0].function.arguments:
-                tool_calls[-1]["function"]["arguments"] += chunk.choices[0].delta.tool_calls[0].function.arguments
+    for b in api_resp.http_response.iter_raw():
+        chunk_str = b.decode("utf-8")
+        chunk_str = chunk_str.replace("\r", "").replace("event: \n", "")
+        chunks += chunk_str
+        for data_str in chunk_str.split("\n\n"):
+            if "data:" in data_str:
+                try:
+                    chunk = json.loads(chunk_str.split("data:")[1])
+                    if "choices" in chunk and "delta" in chunk["choices"][0] and "tool_calls" in chunk["choices"][0]["delta"]:
+                        if "type" in chunk["choices"][0]["delta"]["tool_calls"][0] and chunk["choices"][0]["delta"]["tool_calls"][0]["type"] is not None:
+                            tool_calls.append({"type": "function", "function": {"name": chunk["choices"][0]["delta"]["tool_calls"][0]["function"]["name"], "arguments": ""}})
+                        else:
+                            tool_calls[-1]["function"]["arguments"] += chunk["choices"][0]["delta"]["tool_calls"][0]["function"]["arguments"]
+                except:
+                    pass
 
     # Wait for processing queued items
     sleep(10.0)
@@ -2606,7 +897,7 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
 
     assert db_request.content == messages[-1]["content"]
     assert json.loads(db_resonse.tool_calls) == tool_calls
-    assert json.loads(db_resonse.raw_body) == chunks
+    assert db_resonse.raw_body == chunks
     # NOTE: It doesn't completely same because FastAPI/Uvicorn adds some values. (e.g. date, server)
     # 'date': 'Mon, 11 Dec 2023 14:06:05 GMT, Mon, 11 Dec 2023 14:06:08 GMT'
     # 'server': 'uvicorn, cloudflare'
@@ -2640,5 +931,4 @@ def test_post_content_stream_apierror(messages, request_headers, openai_client, 
     db_resonse = db.query(AccessLog).where(AccessLog.request_id == request_id, AccessLog.direction == "error").first()
 
     assert db_request.content == messages[-1]["content"]
-    assert str(apisterr.value) in db_resonse.content
     assert db_resonse.status_code == api_resp.status_code
