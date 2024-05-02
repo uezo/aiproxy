@@ -532,7 +532,7 @@ def db(worker):
 
 @pytest.fixture
 def openai_client():
-    return Client(base_url="http://127.0.0.1:8000/chatgpt")
+    return Client(base_url="http://127.0.0.1:8000/openai")
 
 @pytest.mark.asyncio
 async def test_request_filter_overwrite(chatgpt_proxy, request_json, request_headers):

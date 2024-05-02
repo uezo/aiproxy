@@ -86,9 +86,6 @@ class ClaudeStreamResponseItem(SessionStreamChunkItemBase):
             if len(chunk_split) < 2:
                 continue    # Skip invalid data
 
-            print("====")
-            print(chunk_split[1])
-
             chunk_json = json.loads(chunk_split[1].strip())
 
             # Get metadata of request
@@ -157,7 +154,9 @@ class ClaudeProxy(HTTPXProxy):
         )
 
         self.api_key = api_key
-        self.api_base_url = "https://api.anthropic.com/v1/messages"
+        self.api_base_url = "https://api.anthropic.com/v1"
+        self.api_chat_resource_path = "/messages"
+        self.api_service_id = "anthropic"
 
     def text_to_response_json(self, text: str) -> dict:
         return {

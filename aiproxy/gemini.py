@@ -134,7 +134,9 @@ class GeminiProxy(HTTPXProxy):
         )
 
         self.api_key = api_key
-        self.api_base_url = "https://generativelanguage.googleapis.com/v1beta/models/{model}:{method}?key={api_key}"
+        self.api_base_url = "https://generativelanguage.googleapis.com"
+        self.api_chat_resource_path = "/v1beta/models/{model}:{method}?key={api_key}"
+        self.api_service_id = "googleaistudio"
 
     def text_to_response_json(self, text: str) -> dict:
         return {
@@ -245,8 +247,15 @@ class GeminiProxy(HTTPXProxy):
         session.stream = ":streamGenerateContent" in str(session.request_url)
         session.extra_info["model"] = re.search(r"models/(.*?):", session.request_url).group(1)
 
+    def prepare_httpx_request_headers(self, session: SessionInfo):
+        super().prepare_httpx_request_headers(session)
+        # Remove accept-encoding to prevent gzip response (gzip causes decoding error in processing stream)
+        if session.request_headers.get("accept-encoding"):
+            del session.request_headers["accept-encoding"]
+
     def make_url(self, session: SessionInfo):
-        return self.api_base_url.format(
+        url = super().make_url(session)
+        return url.format(
             model=session.extra_info["model"],
             method="streamGenerateContent" if session.stream else "generateContent",
             api_key=self.api_key

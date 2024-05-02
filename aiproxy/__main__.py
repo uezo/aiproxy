@@ -41,6 +41,6 @@ proxy = ChatGPTProxy(api_key=args.openai_api_key, access_logger_queue=worker.que
 
 # Setup server application
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-proxy.add_route(app, "/chat/completions")
+proxy.add_route(app)
 
 uvicorn.run(app, host=args.host, port=args.port)
