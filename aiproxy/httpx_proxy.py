@@ -1,3 +1,4 @@
+from datetime import datetime
 import json
 import logging
 import time
@@ -5,12 +6,12 @@ import traceback
 from typing import List, Union
 from uuid import uuid4
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from sse_starlette.sse import EventSourceResponse
 import httpx
 from aiproxy.proxy import ProxyBase, RequestFilterBase, ResponseFilterBase, RequestFilterException, ResponseFilterException
 from aiproxy.queueclient import QueueClientBase
-from aiproxy.accesslog import RequestItemBase, ResponseItemBase, StreamChunkItemBase, ErrorItemBase
+from aiproxy.accesslog import _AccessLogBase, RequestItemBase, ResponseItemBase, StreamChunkItemBase, ErrorItemBase
 
 
 logger = logging.getLogger(__name__)
@@ -88,6 +89,39 @@ class SessionErrorItemBase(ErrorItemBase):
         return item
 
 
+class SessionRequestItemEssential(SessionRequestItemBase):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        return accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="request",
+            content="",
+            raw_body=self.request_json.decode("utf-8"),
+            raw_headers=json.dumps(self.session.request_headers, ensure_ascii=False),
+            model=self.session.extra_info["resource_path"]
+        )
+
+
+class SessionResponseItemEssential(SessionResponseItemBase):
+    def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
+        return accesslog_cls(
+            request_id=self.request_id,
+            created_at=datetime.utcnow(),
+            direction="response",
+            status_code=self.status_code,
+            content="",
+            function_call=None,
+            tool_calls=None,
+            raw_body=self.response_json.decode("utf-8"),
+            raw_headers=json.dumps(self.response_headers, ensure_ascii=False),
+            model=self.session.extra_info["resource_path"],
+            prompt_tokens=0,
+            completion_tokens=0,
+            request_time=self.duration,
+            request_time_api=self.duration_api
+        )
+
+
 # HTTPX-based reverse proxy application
 class HTTPXProxy(ProxyBase):
     def __init__(
@@ -117,6 +151,9 @@ class HTTPXProxy(ProxyBase):
         self.error_item_class: SessionErrorItemBase = error_item_class
 
         self.api_base_url = "empty_url"
+        self.api_chat_resource_path = "/path/to/chat"
+        self.api_service_id = "empty_id"
+        self.api_chat_method = "POST"
 
     # Filter
     def text_to_response_json(self, text: str) -> dict:
@@ -195,7 +232,7 @@ class HTTPXProxy(ProxyBase):
         session.response_headers["X-AIProxy-Request-Id"] = session.request_id
 
     def make_url(self, session: SessionInfo):
-        return self.api_base_url
+        return self.api_base_url + self.api_chat_resource_path
 
     # Make responses
     async def make_json_response(self, async_client: httpx.AsyncClient, session: SessionInfo):
@@ -248,7 +285,10 @@ class HTTPXProxy(ProxyBase):
                             elif line.startswith("data:"):
                                 datas.append(line[5:].strip())
 
-                        yield {"event": event_type, "data": "\n".join(datas)}
+                        if event_type:
+                            yield {"event": event_type, "data": "\n".join(datas)}
+                        else:
+                            yield {"data": "\n".join(datas)}
             
             finally:
                 # Make response log
@@ -289,9 +329,9 @@ class HTTPXProxy(ProxyBase):
         return json_response
 
     # Request handler
-    def add_route(self, app: FastAPI, base_url: str):
-        @app.post(base_url)
-        async def handle_request(request: Request):
+    def add_route(self, app: FastAPI):
+        @app.api_route(f"/{self.api_service_id}{self.api_chat_resource_path}", methods=[self.api_chat_method])
+        async def handle_chat_request(request: Request):
             session = SessionInfo()
 
             try:
@@ -329,6 +369,100 @@ class HTTPXProxy(ProxyBase):
                         async_client,
                         session
                     )
+
+            # Error handlers
+            except RequestFilterException as rfex:
+                logger.error(f"Request filter error: {rfex}\n{traceback.format_exc()}")
+                return self.make_error_response(session, rfex.status_code, rfex, "request_filter_error")
+
+            except ResponseFilterException as rfex:
+                logger.error(f"Response filter error: {rfex}\n{traceback.format_exc()}")
+                return self.make_error_response(session, rfex.status_code, rfex, "response_filter_error")
+
+            except httpx.HTTPStatusError as htex:
+                logger.error(f"Error at server: {htex}\n{traceback.format_exc()}")
+
+                # Error log
+                try:
+                    resp_json = htex.response.json()
+                except:
+                    try:
+                        content = await htex.response.aread()
+                        if isinstance(content, bytes):
+                            content = content.decode("utf-8")
+                        else:
+                            content = str(content)
+                        resp_json = json.loads(content)
+                    except:
+                        resp_json = {"type": "error", "error": {"type": "http_error", "message": "Failed in parsing error response."}}
+
+                self.prepare_httpx_response_headers(session)
+
+                self.access_logger_queue.put(self.error_item_class.from_session(
+                    session=session,
+                    exception=htex,
+                    traceback_info=traceback.format_exc()
+                ))
+
+                return JSONResponse(
+                    resp_json,
+                    status_code=htex.response.status_code,
+                    headers=session.response_headers
+                )
+
+            except Exception as ex:
+                logger.error(f"Error at server: {ex}\n{traceback.format_exc()}")
+                return self.make_error_response(session, 502, ex, "proxy_error")
+
+        @app.api_route(f"/{self.api_service_id}/{{resource_path:path}}", methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD", "PATCH"])
+        async def handle_request(request: Request, resource_path: str):
+            session = SessionInfo()
+
+            try:
+                # Parse request
+                session.request_json = await request.body()
+                session.request_headers = dict(request.headers.items())
+                session.request_url = str(request.url)
+                session.extra_info["resource_path"] = "/" + resource_path
+
+                # Log request
+                self.access_logger_queue.put(SessionRequestItemEssential.from_session(session))
+
+
+                # Call API and handling response from API
+                async_client = httpx.AsyncClient(timeout=self.timeout)
+                try:
+                    self.prepare_httpx_request_headers(session)
+                    httpx_request = httpx.Request(method=request.method, url=self.api_base_url + "/" + resource_path, headers=session.request_headers, data=session.request_json)
+                    httpx_response = await async_client.send(request=httpx_request)
+
+                    # Parse response
+                    session.response_headers = dict(httpx_response.headers)
+                    session.status_code = httpx_response.status_code
+                    session.response_json = httpx_response.content
+                    session.duration_api = time.time() - session.start_time_api
+
+                    self.prepare_httpx_response_headers(session)
+                    httpx_response.raise_for_status()
+
+                    # Make response
+                    response = Response(
+                        session.response_json,
+                        session.status_code,
+                        session.response_headers
+                    )
+
+                    # Response log
+                    session.duration = time.time() - session.start_time
+                    self.access_logger_queue.put(
+                        SessionResponseItemEssential.from_session(session=session)
+                    )
+
+                    return response
+
+                except Exception as ex:
+                    await async_client.aclose()
+                    raise ex
 
             # Error handlers
             except RequestFilterException as rfex:
