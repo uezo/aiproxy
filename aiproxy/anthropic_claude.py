@@ -154,8 +154,8 @@ class ClaudeProxy(HTTPXProxy):
         )
 
         self.api_key = api_key
-        self.api_base_url = "https://api.anthropic.com/v1"
-        self.api_chat_resource_path = "/messages"
+        self.api_base_url = "https://api.anthropic.com"
+        self.api_chat_resource_path = "/v1/messages"
         self.api_service_id = "anthropic"
 
     def text_to_response_json(self, text: str) -> dict:
