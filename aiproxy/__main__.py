@@ -1,6 +1,5 @@
 import argparse
 from contextlib import asynccontextmanager
-import logging
 import os
 from fastapi import FastAPI
 from aiproxy import ChatGPTProxy, AccessLogWorker
@@ -11,19 +10,11 @@ import uvicorn
 env_openai_api_key = os.getenv("OPENAI_API_KEY")
 
 # Get arguments
-parser = argparse.ArgumentParser(description="UnaProxy usage")
+parser = argparse.ArgumentParser(description="AIProxy usage")
 parser.add_argument("--host", type=str, default="127.0.0.1", required=False, help="hostname or ipaddress")
 parser.add_argument("--port", type=int, default="8000", required=False, help="port number")
 parser.add_argument("--openai_api_key", type=str, default=env_openai_api_key, required=False, help="OpenAI API Key")
 args = parser.parse_args()
-
-# Setup logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-log_format = logging.Formatter("%(asctime)s %(levelname)8s %(message)s")
-streamHandler = logging.StreamHandler()
-streamHandler.setFormatter(log_format)
-logger.addHandler(streamHandler)
 
 # Setup access log worker
 worker = AccessLogWorker()
