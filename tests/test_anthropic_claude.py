@@ -802,7 +802,7 @@ async def test_response_filter_valuereturn(claude_proxy, response_json):
 
 def test_post_content(prompt_text, request_json, request_headers, db):
     response = httpx.post(
-        url="http://127.0.0.1:8000/anthropic/messages",
+        url="http://127.0.0.1:8000/anthropic/v1/messages",
         headers={
             "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
             "anthropic-version": "2023-06-01"
@@ -831,7 +831,7 @@ def test_post_content_apierror(prompt_text, request_json, request_headers, db):
     with pytest.raises(HTTPStatusError) as status_error:
         request_json["max_tokens"] = 999999999
         httpx.post(
-            url="http://127.0.0.1:8000/anthropic/messages",
+            url="http://127.0.0.1:8000/anthropic/v1/messages",
             headers={
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01"
@@ -861,7 +861,7 @@ def test_post_content_stream(prompt_text, request_json, request_headers, db):
     request_json["stream"] = True
     request = httpx.Request(
         method="POST",
-        url="http://127.0.0.1:8000/anthropic/messages",
+        url="http://127.0.0.1:8000/anthropic/v1/messages",
         headers={
             "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
             "anthropic-version": "2023-06-01"
@@ -901,7 +901,7 @@ def test_post_content_stream_apierror(prompt_text, request_json, request_headers
         request_json["max_tokens"] = 999999999
         request = httpx.Request(
             method="POST",
-            url="http://127.0.0.1:8000/anthropic/messages",
+            url="http://127.0.0.1:8000/anthropic/v1/messages",
             headers={
                 "x-api-key": os.getenv("ANTHROPIC_API_KEY"),
                 "anthropic-version": "2023-06-01",
