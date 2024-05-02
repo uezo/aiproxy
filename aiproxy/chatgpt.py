@@ -240,8 +240,8 @@ class ChatGPTProxy(HTTPXProxy):
         )
 
         self.api_key = api_key
-        self.api_base_url = "https://api.openai.com"
-        self.api_chat_resource_path = "/v1/chat/completions"
+        self.api_base_url = "https://api.openai.com/v1"
+        self.api_chat_resource_path = "/chat/completions"
         self.api_service_id = "openai"
 
     def text_to_response_json(self, text: str) -> dict:
