@@ -291,3 +291,50 @@ class ChatGPTProxy(HTTPXProxy):
     def prepare_httpx_request_headers(self, session: SessionInfo):
         super().prepare_httpx_request_headers(session)
         session.request_headers["authorization"] = f"Bearer {self.api_key}"
+
+
+# Reverse proxy application for Azure OpenAI Service API
+class AzureOpenAIProxy(ChatGPTProxy):
+    def __init__(
+        self,
+        *,
+        api_key: str = None,
+        resource_name: str = None,
+        deployment_id: str = None,
+        api_version: str = None,
+        timeout=60.0,
+        request_filters: List[RequestFilterBase] = None,
+        response_filters: List[ResponseFilterBase] = None,
+        request_item_class: type = ChatGPTRequestItem,
+        response_item_class: type = ChatGPTResponseItem,
+        stream_response_item_class: type = ChatGPTStreamResponseItem,
+        error_item_class: type = ChatGPTErrorItem,
+        access_logger_queue: QueueClientBase
+    ):
+        super().__init__(
+            api_key=api_key,
+            timeout=timeout,
+            request_filters=request_filters,
+            response_filters=response_filters,
+            request_item_class=request_item_class,
+            response_item_class=response_item_class,
+            stream_response_item_class=stream_response_item_class,
+            error_item_class=error_item_class,
+            access_logger_queue=access_logger_queue
+        )
+
+        self.api_base_url = "https://{resource_name}.openai.azure.com/openai/deployments/{deployment_id}/chat/completions?api-version={api_version}"
+        self.resource_name = resource_name
+        self.deployment_id = deployment_id
+        self.api_version = api_version
+
+    def prepare_httpx_request_headers(self, session: SessionInfo):
+        super().prepare_httpx_request_headers(session)
+        session.request_headers["api-key"] = self.api_key
+
+    def make_url(self, session: SessionInfo):
+        return self.api_base_url.format(
+            resource_name=self.resource_name,
+            deployment_id=self.deployment_id,
+            api_version=self.api_version
+        )

@@ -28,7 +28,7 @@ Use.
 
 ```python
 import openai
-client = openai.Client(base_url="http://127.0.0.1:8000/", api_key="YOUR_API_KEY")
+client = openai.Client(base_url="http://127.0.0.1:8000/openai", api_key="YOUR_API_KEY")
 resp = client.chat.completions.create(model="gpt-3.5-turbo", messages=[{"role": "user", "content": "hello!"}])
 print(resp)
 ```
@@ -36,34 +36,85 @@ print(resp)
 Enjoy😊🦉
 
 
+## 🏅 Use official client libraries
+
+You can use the official client libraries for each LLM by just changing API endpoint url.
+
+### ChatGPT
+
+Set `http|https://your_host/openai` as `base_url` to client.
+
+```python
+import openai
+
+client = openai.Client(
+    api_key="YOUR_API_KEY",
+    base_url="http://127.0.0.1:8000/openai"
+)
+
+resp = client.chat.completions.create(
+    model="gpt-3.5-turbo",
+    messages=[{"role": "user", "content": "hello!"}]
+)
+
+print(resp)
+```
+
+### Anthropic Claude
+
+Set `http|https://your_host/anthropic` as `base_url` to client.
+
+```python
+from anthropic import Anthropic
+
+client = Anthropic(
+    api_key="YOUR_API_KEY",
+    base_url="http://127.0.0.1:8000/anthropic"
+)
+
+resp = client.messages.create(
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello, Claude",}],
+    model="claude-3-haiku-20240307",
+)
+
+print(resp.content)
+```
+
+### Google Gemini (AI Studio)
+
+API itself is compatible but client of `google.generativeai` doesn't support rewriting urls. Use httpx instead.
+
+```python
+import httpx
+
+resp = httpx.post(
+    url="http://127.0.0.1:8000/googleaistudio/v1beta/models/gemini-1.5-pro-latest:generateContent",
+    json={
+        "contents": [{"role": "user", "parts":[{"text": "Hello, Gemini!"}]}],
+        "generationConfig": {"temperature": 0.5, "maxOutputTokens": 1000}
+    }
+)
+
+print(resp.json())
+```
+
+
 ## 🛠️ Custom entrypoint
 
-To customize **🦉AIProxy**, make your custom entrypoint and configure logger and filters here.
+To customize **🦉AIProxy**, make your custom entrypoint first. You can customize the metrics you want to monitor, add filters, change databases, etc.
 
 ```python
 from contextlib import asynccontextmanager
-import logging
-from fastapi import FastAPI
-from aiproxy import ChatGPTProxy, AccessLogWorker
 import threading
-
-# Setup logger
-logger = logging.getLogger()
-logger.setLevel(logging.INFO)
-log_format = logging.Formatter("%(asctime)s %(levelname)8s %(message)s")
-streamHandler = logging.StreamHandler()
-streamHandler.setFormatter(log_format)
-logger.addHandler(streamHandler)
+from fastapi import FastAPI
+from aiproxy import AccessLogWorker
+from aiproxy.chatgpt import ChatGPTProxy
+from aiproxy.anthropic_claude import ClaudeProxy
+from aiproxy.gemini import GeminiProxy
 
 # Setup access log worker
-# worker = AccessLogWorker()
-worker = CustomAccessLogWorker(accesslog_cls=CustomAccessLog)   # 🌟 Instantiate your custom access log worker
-
-# Setup proxy for ChatGPT
-proxy = ChatGPTProxy(api_key=YOUR_API_KEY, access_logger_queue=worker.queue_client)
-proxy.add_filter(CustomRequestFilter1())     # 🌟 Set your custom filter(s)
-proxy.add_filter(CustomRequestFilter2())     # 🌟 Set your custom filter(s)
-proxy.add_filter(CustomResponseFilter())     # 🌟 Set your custom filter(s)
+worker = AccessLogWorker(connection_str="sqlite:///aiproxy.db")
 
 # Setup server application
 @asynccontextmanager
@@ -75,55 +126,33 @@ async def lifespan(app: FastAPI):
     worker.queue_client.put(None)
 
 app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None, openapi_url=None)
-proxy.add_route(app, "/chat/completions")
+
+# Proxy for ChatGPT
+chatgpt_proxy = ChatGPTProxy(
+    api_key=OPENAI_API_KEY,
+    access_logger_queue=worker.queue_client
+)
+chatgpt_proxy.add_route(app)
+
+# Proxy for Anthropic Claude
+claude_proxy = ClaudeProxy(
+    api_key=ANTHROPIC_API_KEY,
+    access_logger_queue=worker.queue_client
+)
+claude_proxy.add_route(app)
+
+# Proxy for Gemini on Google AI Studio (not Vertex AI)
+gemini_proxy = GeminiProxy(
+    api_key=GOOGLE_API_KEY,
+    access_logger_queue=worker.queue_client
+)
+gemini_proxy.add_route(app)
 ```
 
 Run with uvicorn with some params if you need.
 
 ```sh
-$ uvicorn run:app --host 0.0.0.0 --port 8080
-```
-
-To use Azure OpenAI, instantiate `ChatGPTProxy` with `AsyncAzureOpenAI`.
-
-```python
-azure_client = openai.AsyncAzureOpenAI(
-    api_key = "YOUR_API_KEY",
-    api_version = "2023-10-01-preview",
-    azure_endpoint = "https://{DEPLOYMENT_ID}.openai.azure.com/"
-)
-
-proxy = ChatGPTProxy(async_client=azure_client, access_logger_queue=worker.queue_client)
-```
-
-To use Claude2 on AWS Bedrock, instantiate `Claude2Proxy`.
-
-```python
-from aiproxy.claude2 import Claude2Proxy
-claude_proxy = Claude2Proxy(
-    aws_access_key_id="YOUR_AWS_ACCESS_KEY_ID",
-    aws_secret_access_key="YOUR_AWS_SECRET_ACCESS_KEY",
-    region_name="your-bedrock-region",
-    access_logger_queue=worker.queue_client
-)
-claude_proxy.add_route(app, "/model/anthropic.claude-v2")
-```
-
-Client side. We test API with boto3.
-
-```python
-import boto3
-import json
-# Make client with dummy creds
-session = boto3.Session(aws_access_key_id="dummy", aws_secret_access_key="dummy",)
-bedrock = session.client(service_name="bedrock-runtime", region_name="private", endpoint_url="http://127.0.0.1:8000")
-# Call API
-response = bedrock.invoke_model(
-    modelId="anthropic.claude-v2",
-    body=json.dumps({"prompt": "Human: うなぎとあなごの違いは？\nAssistant: ", "max_tokens_to_sample": 100})
-)
-# Show response
-print(json.loads(response["body"].read()))
+$ uvicorn run:app --host 0.0.0.0 --port 8000
 ```
 
 
@@ -136,15 +165,14 @@ And, you can customize log format as below:
 This is an example to add `user` column to request log. In this case, the customized log are stored into table named `customaccesslog`, the lower case of your custom access log class.
 
 ```python
-from datetime import datetime
-import json
-import traceback
 from sqlalchemy import Column, String
 from aiproxy.accesslog import AccessLogBase, AccessLogWorker
 
+# Make custom schema for database
 class CustomAccessLog(AccessLogBase):
     user = Column(String)
 
+# Make data mapping logic from HTTP headar/body to log
 class CustomGPTRequestItem(ChatGPTRequestItem):
     def to_accesslog(self, accesslog_cls: _AccessLogBase) -> _AccessLogBase:
         accesslog = super().to_accesslog(accesslog_cls)
@@ -154,14 +182,19 @@ class CustomGPTRequestItem(ChatGPTRequestItem):
 
         return accesslog
 
-# Use your custom accesslog
-worker = CustomAccessLogWorker(accesslog_cls=CustomAccessLog)
+# Make worker with custom log schema
+worker = AccessLogWorker(accesslog_cls=CustomAccessLog)
 
-# Use your custom request item
-proxy = ChatGPTProxy(access_logger_queue=worker.queue_client, request_item_class=CustomGPTRequestItem)
+# Make proxy with your custom request item
+proxy = ChatGPTProxy(
+    api_key=YOUR_API_KEY,
+    access_logger_queue=worker.queue_client,
+    request_item_class=CustomGPTRequestItem
+)
 ```
 
 NOTE: By default `AccessLog`, OpenAI API Key in the request headers is masked.
+
 
 
 ## 🛡️ Filtering
@@ -314,18 +347,6 @@ http://localhost:8088
 Configure CORS if you call API from web apps. https://fastapi.tiangolo.com/tutorial/cors/
 
 
-### Retry
-
-🦉AIProxy does not retry when API returns 5xx error because the OpenAI official client library retries. Sett `max_retries` to `ChatGPTProxy` if you call 🦉AIProxy from general HTTP client library.
-
-```python
-proxy = ChatGPTProxy(
-    api_key=args.openai_api_key,
-    access_logger_queue=worker.queue_client,
-    max_retries=2   # OpenAI's default is 2
-)
-```
-
 ### Database
 
 You can use other RDBMS that is supported by SQLAlchemy. You can use them by just changing connection string. (and, install client libraries required.)
@@ -360,13 +381,59 @@ connection_str = f"mssql+pyodbc:///?odbc_connect=DRIVER={ODBC Driver 18 for SQL 
 worker = AccessLogWorker(connection_str=connection_str)
 ```
 
-### Restrictions
+### Azure OpenAI
 
-| Features | ChatGPT | ChatGPT<br>Stream | Claude2 | Claude2<br>Stream |
-| ---- | ---- | ---- | ---- | ---- |
-| Request filter | ✅ | ✅ | ✅ | Instant response is non-stream with status code 400 |
-| Response filter | ✅ | N/A | ✅ | N/A |
-| API keys | Server/Client | Server/Client | Server | Server |
+To use Azure OpenAI, use `AzureOpenAIProxy` instead of `ChatGPTProxy`.
+
+```python
+from aiproxy.chatgpt import AzureOpenAIProxy
+
+aoai_proxy = AzureOpenAIProxy(
+    api_key="YOUR_API_KEY",
+    resource_name="YOUR_RESOURCE_NAME",
+    deployment_id="YOUR_DEPLOYMENT_ID",
+    api_version="2024-02-01",   # https://learn.microsoft.com/ja-jp/azure/ai-services/openai/reference#chat-completions
+    access_logger_queue=worker.queue_client
+)
+aoai_proxy.add_route(app)
+```
+
+Clients do not need to be aware that it is Azure OpenAI; use the same code for ChatGPT API.
+
+
+### Amazon Bedrock
+
+**up to version 0.3.6. We are now updating🖊️**
+
+To use Claude2 on Amazon Bedrock, instantiate `Claude2Proxy`.
+
+```python
+from aiproxy.claude2 import Claude2Proxy
+claude_proxy = Claude2Proxy(
+    aws_access_key_id="YOUR_AWS_ACCESS_KEY_ID",
+    aws_secret_access_key="YOUR_AWS_SECRET_ACCESS_KEY",
+    region_name="your-bedrock-region",
+    access_logger_queue=worker.queue_client
+)
+claude_proxy.add_route(app, "/model/anthropic.claude-v2")
+```
+
+Client side. We test API with boto3.
+
+```python
+import boto3
+import json
+# Make client with dummy creds
+session = boto3.Session(aws_access_key_id="dummy", aws_secret_access_key="dummy",)
+bedrock = session.client(service_name="bedrock-runtime", region_name="private", endpoint_url="http://127.0.0.1:8000")
+# Call API
+response = bedrock.invoke_model(
+    modelId="anthropic.claude-v2",
+    body=json.dumps({"prompt": "Human: うなぎとあなごの違いは？\nAssistant: ", "max_tokens_to_sample": 100})
+)
+# Show response
+print(json.loads(response["body"].read()))
+```
 
 
 ## 🛟 Support

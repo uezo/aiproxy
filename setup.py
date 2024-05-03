@@ -1,8 +1,9 @@
 from setuptools import setup
+from aiproxy import __version__
 
 setup(
     name="aiproxy-python",
-    version="0.3.6",
+    version=__version__,
     url="https://github.com/uezo/aiproxy",
     author="uezo",
     author_email="uezo@uezo.net",
@@ -12,7 +13,7 @@ setup(
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     install_requires=[
-        "openai==1.3.6",
+        "httpx==0.27.0",
         "fastapi==0.103.2",
         "uvicorn==0.23.2",
         "sse-starlette==1.8.2",
