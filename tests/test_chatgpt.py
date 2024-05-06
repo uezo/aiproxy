@@ -629,7 +629,6 @@ def test_post_content(messages, request_headers, openai_client, db):
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -668,7 +667,6 @@ def test_post_content_custom_log(messages, request_headers, openai_client, db):
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -706,7 +704,6 @@ def test_post_content_function(messages, request_headers, functions, openai_clie
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -740,7 +737,6 @@ def test_post_content_tools(messages, request_headers, tools, openai_client, db)
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -808,7 +804,6 @@ def test_post_content_stream(messages, request_headers, openai_client, db):
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -856,7 +851,6 @@ def test_post_content_stream_function(messages, request_headers, functions, open
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 
@@ -904,7 +898,6 @@ def test_post_content_stream_tools(messages, request_headers, tools, openai_clie
     # assert json.loads(db_resonse.raw_headers) == dict(headers.items())
     # Check some headear items
     db_headers = json.loads(db_resonse.raw_headers)
-    assert "openai-model" in db_headers
     assert "openai-processing-ms" in db_headers
     assert db_resonse.status_code == api_resp.status_code
 

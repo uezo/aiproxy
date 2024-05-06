@@ -135,6 +135,10 @@ class ChatGPTStreamResponseItem(SessionStreamChunkItemBase):
 
             chunk_json = json.loads(chunk_strip[5:])
 
+            if usage := chunk_json.get("usage"):
+                prompt_tokens = usage["prompt_tokens"]
+                completion_tokens = usage["completion_tokens"]
+
             if len(chunk_json["choices"]) == 0:
                 # Azure returns the first delta with empty choices
                 continue
@@ -179,14 +183,15 @@ class ChatGPTStreamResponseItem(SessionStreamChunkItemBase):
         response_headers = json.dumps(dict(self.response_headers.items()), ensure_ascii=False) if self.response_headers is not None else None
 
         # Count tokens
-        prompt_tokens = count_request_token(self.session.request_json)
+        if prompt_tokens == 0 or completion_tokens == 0:
+            prompt_tokens = count_request_token(self.session.request_json)
 
-        if tool_calls_str:
-            completion_tokens = count_token(tool_calls_str)
-        elif function_call_str:
-            completion_tokens = count_token(function_call_str)
-        else:
-            completion_tokens = count_token(response_text)
+            if tool_calls_str:
+                completion_tokens = count_token(tool_calls_str)
+            elif function_call_str:
+                completion_tokens = count_token(function_call_str)
+            else:
+                completion_tokens = count_token(response_text)
 
         return accesslog_cls(
             request_id=self.request_id,
@@ -287,6 +292,10 @@ class ChatGPTProxy(HTTPXProxy):
     async def parse_request(self, fastapi_request: Request, session: SessionInfo):
         await super().parse_request(fastapi_request, session)
         session.stream = session.request_json.get("stream") is True
+        if session.stream:
+            if not session.request_json.get("stream_options"):
+                session.request_json["stream_options"] = {}
+            session.request_json["stream_options"]["include_usage"] = True
 
     def prepare_httpx_request_headers(self, session: SessionInfo):
         super().prepare_httpx_request_headers(session)
@@ -327,6 +336,11 @@ class AzureOpenAIProxy(ChatGPTProxy):
         self.resource_name = resource_name
         self.deployment_id = deployment_id
         self.api_version = api_version
+
+    async def parse_request(self, fastapi_request: Request, session: SessionInfo):
+        await super().parse_request(fastapi_request, session)
+        if session.request_json.get("stream_options"):
+            del session.request_json["stream_options"]
 
     def prepare_httpx_request_headers(self, session: SessionInfo):
         super().prepare_httpx_request_headers(session)
