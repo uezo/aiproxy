@@ -403,36 +403,41 @@ Clients do not need to be aware that it is Azure OpenAI; use the same code for C
 
 ### Amazon Bedrock
 
-**up to version 0.3.6. We are now updating🖊️**
-
-To use Claude2 on Amazon Bedrock, instantiate `Claude2Proxy`.
+To use Claude on Amazon Bedrock, use `BedrockClaudeProxy` instead of `ClaudeProxy`.
 
 ```python
-from aiproxy.claude2 import Claude2Proxy
-claude_proxy = Claude2Proxy(
+from aiproxy.bedrock_claude import BedrockClaudeProxy
+
+bedrock_claude_proxy = BedrockClaudeProxy(
     aws_access_key_id="YOUR_AWS_ACCESS_KEY_ID",
     aws_secret_access_key="YOUR_AWS_SECRET_ACCESS_KEY",
-    region_name="your-bedrock-region",
+    region_name="YOUR_REGION",
     access_logger_queue=worker.queue_client
 )
-claude_proxy.add_route(app, "/model/anthropic.claude-v2")
+bedrock_claude_proxy.add_route(app)
 ```
 
-Client side. We test API with boto3.
+
+Client side. We test API with `AnthropicBedrock`.
 
 ```python
-import boto3
-import json
-# Make client with dummy creds
-session = boto3.Session(aws_access_key_id="dummy", aws_secret_access_key="dummy",)
-bedrock = session.client(service_name="bedrock-runtime", region_name="private", endpoint_url="http://127.0.0.1:8000")
-# Call API
-response = bedrock.invoke_model(
-    modelId="anthropic.claude-v2",
-    body=json.dumps({"prompt": "Human: うなぎとあなごの違いは？\nAssistant: ", "max_tokens_to_sample": 100})
+# Make client with `base_url`
+client = anthropic.AnthropicBedrock(
+    aws_secret_key="dummy_aws_secret_access_key",
+    aws_access_key="dummy_aws_access_key_id",
+    aws_region="dummy_region_name",
+    base_url="http://127.0.0.1:8000/bedrock-claude"
 )
-# Show response
-print(json.loads(response["body"].read()))
+
+resp = client.messages.create(
+    model="anthropic.claude-3-haiku-20240307-v1:0",
+    messages=[{"role": "user", "content": [{"type": "text", "text": "こんにちは！"}]}],
+    max_tokens=512,
+    stream=True
+)
+
+for r in resp:
+    print(r)
 ```
 
 
